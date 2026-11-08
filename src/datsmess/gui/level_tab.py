@@ -95,7 +95,7 @@ class LevelTab(QtWidgets.QWidget):
         row.addWidget(self.btn_csv)
         ll.addLayout(row)
 
-        self.imp = ImpedancePlot()
+        self.imp = ImpedancePlot(name="level")
         self.trend = pg.PlotWidget()
         self.trend.setLabel("bottom", "Pegel [dBFS]")
         self.trend.setLabel("left", "Änderung ggü. leisestem Pegel [%]")

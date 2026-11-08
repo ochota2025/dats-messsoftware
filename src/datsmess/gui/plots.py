@@ -1,6 +1,7 @@
 """Zoombare Impedanz-Diagramme (FN-01, DM-02)."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 import numpy as np
@@ -70,6 +71,7 @@ def display_data(m, smoothing) -> tuple[np.ndarray, np.ndarray]:
     return m.resampled(4000 if smoothing is None else 2000, octave_frac=smoothing)
 
 
+DEFAULT_FREQ = (20.0, 20000.0)          # Startbereich: Hörbereich statt 1 Hz … 20 kHz
 FREQ_PRESETS = [("Komplett (1 Hz – 20 kHz)", 1.0, 20000.0), ("Hörbereich (20 Hz – 20 kHz)", 20.0, 20000.0),
                 ("Tiefton/Resonanz (5 Hz – 500 Hz)", 5.0, 500.0), ("Mittel-/Hochton (200 Hz – 20 kHz)", 200.0, 20000.0)]
 
@@ -147,11 +149,16 @@ class ImpedancePlot(QtWidgets.QWidget):
 
     logYChanged = QtCore.Signal(bool)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, name: str | None = None):
+        """``name``: unter diesem Schlüssel merkt sich das Diagramm Frequenzbereich und |Z| log
+        über einen Neustart hinweg (ohne Namen: nichts speichern)."""
         super().__init__(parent)
+        self.name = name
         self.mode = "magphase"
         self.log_y = False
         self._curves: list[Curve] = []
+        self._x_view = self._padded(*DEFAULT_FREQ)     # sichtbarer Frequenzbereich (log10)
+        self._load_settings()
 
         self.glw = pg.GraphicsLayoutWidget()
         self.top = self.glw.addPlot(row=0, col=0, axisItems={"bottom": LogAxis("bottom"),
@@ -184,10 +191,50 @@ class ImpedancePlot(QtWidgets.QWidget):
         self.glw.scene().sigMouseMoved.connect(self._mouse_moved)
         self.glw.scene().sigMouseClicked.connect(self._scene_clicked)
         self.glw.setToolTip("Mausrad: zoomen · Ziehen: verschieben · Rechtsklick: Bereich, Skalierung, Export")
+        for p in (self.top, self.bottom):              # Autoskalierung nur über den sichtbaren Bereich
+            p.vb.setAutoVisible(y=True)
+        self._save_timer = QtCore.QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.setInterval(500)
+        self._save_timer.timeout.connect(self._save_settings)
         self._apply_labels()
         self._default_range()
+        self.top.vb.sigXRangeChanged.connect(lambda *_: self._save_timer.start())
         appearance().changed.connect(self._restyle)
         self._restyle()
+
+    # -- gespeicherte Skalierung ------------------------------------------------
+    def _settings_key(self) -> str:
+        return f"plot/{self.name}"
+
+    def _load_settings(self):
+        if not self.name:
+            return
+        try:
+            d = json.loads(QtCore.QSettings().value(self._settings_key(), "{}"))
+            if "f" in d:
+                lo, hi = (float(v) for v in d["f"])
+                if 0.05 <= lo < hi <= 200000:
+                    self._x_view = (float(np.log10(lo)), float(np.log10(hi)))
+            self.log_y = bool(d.get("log_y", False))
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+    def _save_settings(self):
+        if not self.name:
+            return
+        x0, x1 = self.top.vb.viewRange()[0]
+        if not (np.isfinite(x0) and np.isfinite(x1)) or x1 <= x0:
+            return
+        self._x_view = (float(x0), float(x1))
+        QtCore.QSettings().setValue(self._settings_key(), json.dumps(
+            {"f": [round(10 ** x0, 4), round(10 ** x1, 4)], "log_y": self.log_y}))
+
+    @staticmethod
+    def _padded(lo: float, hi: float) -> tuple[float, float]:
+        a, b = np.log10(lo), np.log10(hi)
+        pad = 0.02 * (b - a)
+        return float(a - pad), float(b + pad)
 
     # ------------------------------------------------------------------
     def _restyle(self):
@@ -229,6 +276,7 @@ class ImpedancePlot(QtWidgets.QWidget):
         self._redraw()
         self.top.enableAutoRange(axis="y")
         self.logYChanged.emit(on)
+        self._save_timer.start()
 
     @property
     def top_is_log(self) -> bool:
@@ -268,9 +316,7 @@ class ImpedancePlot(QtWidgets.QWidget):
     def set_freq_range(self, lo: float, hi: float):
         """Frequenzbereich setzen – mit kleinem Rand, damit die Eckfrequenzen (z. B. 20 Hz und 20 kHz)
         noch beschriftet werden; Beschriftungen genau auf dem Achsenrand lässt pyqtgraph weg."""
-        a, b = np.log10(lo), np.log10(hi)
-        pad = 0.02 * (b - a)
-        self.top.setXRange(a - pad, b + pad, padding=0)
+        self.top.setXRange(*self._padded(lo, hi), padding=0)
 
     def set_rect_zoom(self, on: bool):
         mode = pg.ViewBox.RectMode if on else pg.ViewBox.PanMode
@@ -303,11 +349,13 @@ class ImpedancePlot(QtWidgets.QWidget):
             self.glw.grab().save(path)
 
     def set_curves(self, curves: list[Curve], autorange: bool = False):
+        """``autorange``: senkrechte Achsen an die Kurven anpassen. Der Frequenzbereich bleibt, wie
+        ihn der Nutzer eingestellt hat (Standard 20 Hz – 20 kHz) – „Alles anzeigen“ zeigt alles."""
         self._curves = curves
         self._redraw()
         if autorange:
-            self.top.enableAutoRange()
-            self.bottom.enableAutoRange()
+            self.top.enableAutoRange(axis="y")
+            self.bottom.enableAutoRange(axis="y")
 
     def _redraw(self):
         self.top.clear()
@@ -332,8 +380,10 @@ class ImpedancePlot(QtWidgets.QWidget):
             self._default_range()
 
     def _default_range(self):
-        """Leeres Diagramm: sinnvoller Bereich 1 Hz … 20 kHz statt Autoskalierung auf 1 … 10."""
-        self.top.setXRange(0.0, np.log10(20000.0), padding=0.02)
+        """Leeres Diagramm: gemerkter Frequenzbereich (Standard 20 Hz … 20 kHz) statt Autoskalierung
+        auf 1 … 10."""
+        if self.top.vb.autoRangeEnabled()[0] or not self._curves:
+            self.top.setXRange(*self._x_view, padding=0)
         if self.mode == "magphase":
             if self.log_y:
                 self.top.setYRange(0.0, 2.0, padding=0)

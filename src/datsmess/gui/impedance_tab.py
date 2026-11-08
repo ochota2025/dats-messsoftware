@@ -45,7 +45,9 @@ class ImpedanceTab(QtWidgets.QWidget):
         self.auto_hide.setChecked(state.auto_hide)
         self.auto_hide.toggled.connect(lambda on: setattr(state, "auto_hide", on))
         btn_fit = QtWidgets.QPushButton("Alles zeigen")
-        btn_fit.setToolTip("Achsen an die Kurven anpassen")
+        btn_fit.setToolTip("Ganzen Frequenzbereich und alle Kurven zeigen. Hörbereich, Tiefton usw.: "
+                           "Rechtsklick ins Diagramm → Frequenzbereich. Der Bereich bleibt auch nach "
+                           "einem Neustart erhalten.")
 
         def group(label, widget):
             g = QtWidgets.QWidget()
@@ -60,7 +62,7 @@ class ImpedanceTab(QtWidgets.QWidget):
                     self.auto_hide, btn_fit):
             bar.addWidget(wdg)                      # bricht bei schmalem Fenster in die nächste Zeile um
 
-        self.plot = ImpedancePlot()
+        self.plot = ImpedancePlot(name="impedance")
 
         # Messliste
         side = QtWidgets.QWidget()
@@ -108,11 +110,26 @@ class ImpedanceTab(QtWidgets.QWidget):
         lay = QtWidgets.QHBoxLayout(self)
         lay.addWidget(split)
 
+        # Ansicht, Glättung und |Z| log über einen Neustart hinweg merken
+        settings = QtCore.QSettings()
+        i = self.view.findData(settings.value("impedance/view", "magphase"))
+        if i >= 0:
+            self.view.setCurrentIndex(i)
+            self.plot.set_mode(self.view.currentData())
+        i = self.smoothing.findText(str(settings.value("impedance/smoothing", "")))
+        if i >= 0:
+            self.smoothing.setCurrentIndex(i)
+        self._sync_log_y(self.plot.log_y)
+        self.view.currentIndexChanged.connect(
+            lambda: QtCore.QSettings().setValue("impedance/view", self.view.currentData()))
+        self.smoothing.currentIndexChanged.connect(
+            lambda: QtCore.QSettings().setValue("impedance/smoothing", self.smoothing.currentText()))
+
         self.view.currentIndexChanged.connect(lambda: self.plot.set_mode(self.view.currentData()))
         self.smoothing.currentIndexChanged.connect(lambda _i: self.redraw())
         self.log_y.toggled.connect(self.plot.set_log_y)
         self.plot.logYChanged.connect(self._sync_log_y)
-        btn_fit.clicked.connect(lambda: (self.plot.top.enableAutoRange(), self.plot.bottom.enableAutoRange()))
+        btn_fit.clicked.connect(self.plot.auto_range)
         self.list.itemChanged.connect(self._item_changed)
         self.list.itemDoubleClicked.connect(lambda it: self._rename(it.data(QtCore.Qt.UserRole)))
         self.btn_rename.setToolTip("Markierte Messung umbenennen (ohne Markierung: neueste). "

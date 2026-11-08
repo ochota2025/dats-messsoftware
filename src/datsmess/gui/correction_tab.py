@@ -87,7 +87,7 @@ class CorrectionTab(QtWidgets.QWidget):
         ll.addWidget(hint)
         ll.addStretch(1)
 
-        self.plot = ImpedancePlot()
+        self.plot = ImpedancePlot(name="correction")
         split = QtWidgets.QSplitter()
         split.addWidget(left)
         split.addWidget(self.plot)

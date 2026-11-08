@@ -1,5 +1,18 @@
 # Neuerungen
 
+## 0.2.14 – 08.11.2026
+
+- **Diagramme starten mit 20 Hz – 20 kHz** statt mit 1 Hz – 20 kHz.
+- **Die Skalierung bleibt erhalten:** Jedes Diagramm merkt sich seinen Frequenzbereich und „|Z|
+  log“, auch nach dem Schließen und Neustarten. Gilt für Zoomen, Verschieben, *Rechtsklick →
+  Frequenzbereich* und „Bereich festlegen …“. Im Tab „Impedanz“ bleiben außerdem Ansicht
+  (Betrag/Phase oder Real/Imaginär) und Glättung erhalten.
+- Eine neue Messung passt nur noch die senkrechte Achse an die Kurven an. Der Frequenzbereich bleibt
+  so, wie du ihn eingestellt hast. Die senkrechte Achse richtet sich dabei nach dem sichtbaren
+  Bereich.
+- „Alles zeigen“ zeigt wie bisher den ganzen Bereich ab 1 Hz. Zurück zum Hörbereich geht es über
+  *Rechtsklick → Frequenzbereich → Hörbereich*.
+
 ## 0.2.13 – 08.11.2026
 
 - **Taskleiste (Windows):** Angeheftet bleibt jetzt das Programmsymbol, nicht das Python-Symbol,

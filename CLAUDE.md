@@ -29,7 +29,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 94 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 95 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -57,6 +57,9 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 
 - **PySide6-Essentials enthält keine Qt-Übersetzungen**: Standardknöpfe über `gui/de.py`
   (`button_box`, `ask`, `get_text`, `get_item`, `germanize`) eindeutschen, nie `QMessageBox.question` direkt.
+- **Diagramm-Skalierung** (0.2.14): `ImpedancePlot(name=…)` speichert Frequenzbereich + |Z| log unter
+  `plot/<name>` (Standard 20 Hz – 20 kHz); `set_curves(autorange=True)` passt nur Y an (`setAutoVisible`).
+  Qt-Tests brauchen eine `QApplication` (nicht `QCoreApplication`), sonst stürzen spätere Widget-Tests ab.
 - **pyqtgraph-Log-Achsen** rechnen intern in log10: Bereiche mit `np.log10(...)` setzen, beim
   Anzeigen zurückrechnen. Das eingebaute ViewBox-Menü ist bewusst deaktiviert (eigenes Menü in `plots.py`).
 - **Farben** nie fest verdrahten: `appearance().current` (plot_bg, plot_fg, ok, warn, err, accent,
@@ -88,7 +91,7 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Installation ist editierbar (`pip install -e .`); das Flag `.venv/datsmess-editable.flag`
   steuert die einmalige Neu-Einbindung nach einem Update.
 
-## Stand und offene Punkte (08.11.2026, Version 0.2.13)
+## Stand und offene Punkte (08.11.2026, Version 0.2.14)
 
 **Läuft:** beim Tester unter Windows mit dem Simulator; Design im Stil des Icons (hell/dunkel),
 Kennwert-Kacheln, ausblendbare Seitenleiste, Qualitäts-Ampel, Geräte-Check, Pegelreihe, Vergleich,

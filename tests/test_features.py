@@ -324,8 +324,8 @@ def test_device_watcher_polls_signature(qtbot=None):
     """Windows-Weg (ohne QtMultimedia): Änderung der Geräte-Signatur löst ``changed`` aus."""
     import os
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from PySide6 import QtCore
-    app = QtCore.QCoreApplication.instance() or QtCore.QCoreApplication([])
+    from PySide6 import QtWidgets
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])   # auch für spätere Widget-Tests
     from datsmess.gui.device_watch import DeviceWatcher, windows_device_signature
     import sys
     if sys.platform != "win32":
@@ -522,3 +522,40 @@ def test_plot_background_and_touch_stylesheet():
     assert "min-height: 34px" in stylesheet(Appearance(touch="touch"))
     assert "min-height: 34px" not in stylesheet(Appearance(touch="mouse"))
     del app
+
+
+def test_plot_remembers_frequency_range_and_log():
+    """Start mit 20 Hz – 20 kHz; gewählter Bereich und |Z| log überstehen einen Neustart; eine neue
+    Messung passt nur die senkrechte Achse an."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6 import QtCore, QtWidgets
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    QtCore.QStandardPaths.setTestModeEnabled(True)
+    app.setOrganizationName("datsmess-test-plots")
+    QtCore.QSettings().clear()
+    from datsmess.gui.plots import Curve, ImpedancePlot
+
+    def freq(p):
+        x0, x1 = p.top.vb.viewRange()[0]
+        return 10 ** x0, 10 ** x1
+
+    p = ImpedancePlot(name="t")
+    lo, hi = freq(p)
+    assert 15 < lo < 20 and 20000 < hi < 26000             # Hörbereich mit kleinem Rand
+    f = np.geomspace(1, 20000, 200)
+    p.set_curves([Curve("a", f, 6 + 0j * f)], autorange=True)
+    assert abs(freq(p)[0] - lo) < 1e-6                       # Messung ändert die Frequenzachse nicht
+    p.set_freq_range(5, 500)
+    p.set_log_y(True)
+    p._save_settings()
+    q = ImpedancePlot(name="t")                              # „Neustart“
+    lo, hi = freq(q)
+    assert 4 < lo < 5 and 500 < hi < 600 and q.log_y
+    p.auto_range()
+    p.set_curves([Curve("a", f, 6 + 0j * f)])
+    p.top.vb.updateAutoRange()                               # sonst erst beim Zeichnen (Fenster unsichtbar)
+    p._save_settings()
+    assert freq(ImpedancePlot(name="t"))[0] < 1.5            # „Alles anzeigen“ wird ebenfalls gemerkt
+    assert ImpedancePlot().log_y is False                    # ohne Namen: nichts geladen
+    QtCore.QSettings().clear()

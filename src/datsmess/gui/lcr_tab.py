@@ -55,7 +55,7 @@ class LCRTab(QtWidgets.QWidget):
         ll.addWidget(hint)
         ll.addStretch(1)
 
-        self.plot = ImpedancePlot()
+        self.plot = ImpedancePlot(name="lcr")
         split = QtWidgets.QSplitter()
         split.addWidget(left)
         split.addWidget(self.plot)

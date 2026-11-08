@@ -176,7 +176,7 @@ class TSTab(QtWidgets.QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
-        self.plot = ImpedancePlot()
+        self.plot = ImpedancePlot(name="ts")
         right = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         right.addWidget(self.plot)
         right.addWidget(self.table)
