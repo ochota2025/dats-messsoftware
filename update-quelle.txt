@@ -1,0 +1,3 @@
+# Adresse des GitHub-Projekts, von dem die Update-Dateien die neueste Version holen.
+# Nur die Zeile mit https:// zählt.
+https://github.com/ochota2025/dats-messsoftware
