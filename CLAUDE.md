@@ -14,11 +14,13 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
   dann die Rohdatei an diesem SHA – raw.githubusercontent.com cached `main` sonst bis zu 5 Minuten.
 - **Bei jeder Veröffentlichung `__version__` erhöhen** (`src/datsmess/__init__.py` und
   `pyproject.toml`) und einen Abschnitt in `NEUERUNGEN.md` ergänzen – darauf beruhen der
-  Update-Hinweis in der App und „Was ist neu?“.
-  Git-Identität ist repo-lokal gesetzt (`ochota2025`, noreply-Adresse) – nicht ändern.
-- Ein Tester nutzt **Windows** und holt Updates mit `Update-Windows.bat` (lädt `main` als ZIP
-  von GitHub). Nach jedem Push dem Nutzer eine kurze, fertige Messenger-Nachricht für den
-  Tester vorschlagen (Codeblock, du-Form, Emojis sparsam).
+  Update-Hinweis in der App und „Was ist neu?“. Versionen werden numerisch verglichen (0.2.10 > 0.2.9).
+- Git-Identität ist repo-lokal gesetzt (`ochota2025`, noreply-Adresse) – nicht ändern.
+- Ein Tester nutzt **Windows 10** (Laptop, Realtek, Python 3.15) und holt Updates in der App über
+  *Hilfe → Nach Updates suchen → Jetzt aktualisieren* (Notlösung: `Update-Windows.bat`). Er ist
+  kritisch, achtet auf Optik („altbacken“), Bedienkomfort und saubere Kurven – und meldet viel.
+  Nach jedem Push dem Nutzer eine kurze, fertige Messenger-Nachricht für den Tester vorschlagen
+  (Codeblock, du-Form, Emojis sparsam). Der Nutzer leitet Fotos/Texte des Testers weiter.
 - Rückmeldungen kommen oft als Handyfotos vom Bildschirm – genau hinsehen, welche Version
   zu sehen ist (Versionsnummer steht seit 0.2.0 in Titel- und Statusleiste). Besser: Tester um
   *Hilfe → Fehlerbericht → Kopieren* bitten.
@@ -86,11 +88,35 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Installation ist editierbar (`pip install -e .`); das Flag `.venv/datsmess-editable.flag`
   steuert die einmalige Neu-Einbindung nach einem Update.
 
-## Stand und offene Punkte
+## Stand und offene Punkte (08.11.2026, Version 0.2.12)
 
-- Läuft beim Tester unter Windows (Simulator). **Noch nie mit echtem DATS V3 getestet** –
-  Kanalzuordnung, Wert des Kalibrierwiderstands und Kalibrierung sind die Unbekannten.
+**Läuft:** beim Tester unter Windows mit dem Simulator; Design im Stil des Icons (hell/dunkel),
+Kennwert-Kacheln, ausblendbare Seitenleiste, Qualitäts-Ampel, Geräte-Check, Pegelreihe, Vergleich,
+Korrektur, Klirr & Rub/Buzz, Oszilloskop, Datenblatt mit Kommentar, Fehlerbericht, Autosave,
+Selbst-Update mit Fortschrittsfenster. Geräteerkennung und Ein-/Aussteck-Überwachung sind mit der
+echten Geräteliste des Testers bestätigt (Testfall in `tests/test_features.py`).
+
+**Noch nie getestet / unbestätigt:**
+- **Echtes DATS V3** – Gerätename unter Windows, Kanalzuordnung, Kalibrierwiderstand, WASAPI vs. MME,
+  Messgenauigkeit. Plan dafür: Geräte-Check → Kalibrierung → bekannten Widerstand messen →
+  denselben Treiber mit Original-Software (Export .zma) und unserer messen, im Tab „Vergleich“
+  übereinanderlegen.
+- Selbst-Update **mit Neustart unter Windows** (seit 0.2.9; der Tester kam bis dahin über den alten
+  Skript-Weg). `--wait-pid`-Neustart unter Windows nur per Code geprüft.
+
+**Vorschläge, vom Nutzer vorerst zurückgestellt** (nicht ungefragt anfangen):
+- Startzeit Windows (~6 s laut Protokoll): Startbild + spätes Laden selten gebrauchter Tabs
+- Oberflächen-Durchläufe als feste Tests (bisher Hilfsskripte im Scratchpad)
+- WASAPI-Exklusivmodus (umgeht Windows-Mixer/Klangverbesserungen)
+- Deutsche Dezimalkommas in Anzeige/Eingaben; Einrichtungs-Assistent aus einem Guss
+- Simulator-Klirr erzeugt Artefakte in der Impedanzkurve, wenn er zu stark ist (schon zweimal
+  vom Tester bemerkt) – Alternative wäre Zeitfensterung der Oberwellen in der H-Schätzung
+- Bauplan „Messbrücke selbst bauen“ (Soundkarte mit Stereo-Line-In + Widerstand), Android-Version –
+  erst nach erfolgreichem Test mit echtem DATS
+
+**Sonstiges:**
 - T/S mit Zweitmessung: `analysis/ts.py` prüft die fs-Verschiebung (Abbruch < 5 %, Warnung < 20 %,
   Unsicherheit und Empfehlung für Masse/Volumen) – Schwellen als Konstanten `SHIFT_*`.
-- Forderungskatalog vollständig (FA-01, FA-03 elektrisch, OS-01 seit 0.2.0). Native Treiberdateien von WinISD/VituixCAD/Boxsim/LEAP/AJ-Horn sind
-  nicht öffentlich spezifiziert – Profile liefern Eingabelisten.
+- Forderungskatalog vollständig (FA-01, FA-03 elektrisch, OS-01). Native Treiberdateien von
+  WinISD/VituixCAD/Boxsim/LEAP/AJ-Horn sind nicht öffentlich spezifiziert – Profile liefern Eingabelisten.
+- `main_window.py` ist auf gut 1000 Zeilen gewachsen – bei größeren Änderungen aufteilen.
