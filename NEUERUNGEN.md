@@ -1,5 +1,20 @@
 # Neuerungen
 
+## 0.2.13 – 08.11.2026
+
+- **Taskleiste (Windows):** Angeheftet bleibt jetzt das Programmsymbol, nicht das Python-Symbol,
+  und ein Klick startet wieder die Messsoftware. *Wer das Programm schon angeheftet hat: einmal
+  lösen und bei laufendem Programm neu anheften.*
+- **Diagrammhintergrund frei wählbar:** *Ansicht → Darstellung …* hat einen Schieberegler von
+  dunkel über grau bis weiß, dazu „Farbe …“ für jede beliebige Farbe. „Wie Farbschema“ stellt den
+  Standard wieder her. Achsen, Schrift und Modellkurven passen sich automatisch an.
+- **Touch-Bedienung:** Für Touchscreens (z. B. Surface) gibt es große Knöpfe, Auswahlfelder,
+  Häkchen, Reiter, Bildlaufleisten und Regler. Einstellbar in *Ansicht → Darstellung … →
+  Bedienung*: „Automatisch“ schaltet sie ein, wenn ein Touchscreen erkannt wird. Der Schnellschalter
+  ist *Ansicht → Große Schaltflächen (Touch)*.
+- Im Darstellungs-Fenster wirken Hintergrund und Bedienung sofort. „Abbrechen“ stellt den vorherigen
+  Zustand wieder her.
+
 ## 0.2.12 – 08.11.2026
 
 - „Was ist neu?“ nach einem Update zeigt oben, was seit deiner letzten Version neu ist, und darunter

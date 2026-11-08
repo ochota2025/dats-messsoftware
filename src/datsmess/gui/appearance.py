@@ -7,7 +7,7 @@ passen sich daraufhin sofort an.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import pyqtgraph as pg
@@ -25,6 +25,45 @@ PALETTES = {
                                      "#555555", "#999999", "#2ca02c", "#bbbbbb", "#ff7f0e"]),
 }
 THEMES = {"light": "Hell", "dark": "Dunkel"}
+TOUCH_MODES = {"auto": "Automatisch (große Schaltflächen bei Touchscreen)", "mouse": "Maus (kompakt)",
+               "touch": "Touch (große Schaltflächen)"}
+PLOT_BG_DARK, PLOT_BG_LIGHT = "#1b1d21", "#ffffff"
+
+
+def luminance(color: str) -> float:
+    """Relative Helligkeit 0 … 1 (sRGB, WCAG)."""
+    c = QtGui.QColor(color)
+
+    def lin(v: float) -> float:
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * lin(c.redF()) + 0.7152 * lin(c.greenF()) + 0.0722 * lin(c.blueF())
+
+
+def gray_for(level: int) -> str:
+    """Grauton für den Schieberegler 0 (dunkel wie das dunkle Schema) … 100 (weiß)."""
+    level = max(0, min(100, int(level)))
+    lo = QtGui.QColor(PLOT_BG_DARK)
+    t = level / 100
+    r, g, b = (round(x + (255 - x) * t) for x in (lo.red(), lo.green(), lo.blue()))
+    return QtGui.QColor(r, g, b).name()
+
+
+def level_for(color: str) -> int:
+    """Umkehrung von ``gray_for`` (näherungsweise, für beliebige Farben über die Helligkeit)."""
+    c, lo = QtGui.QColor(color), QtGui.QColor(PLOT_BG_DARK)
+    v, v0 = (c.red() + c.green() + c.blue()) / 3, (lo.red() + lo.green() + lo.blue()) / 3
+    return max(0, min(100, round((v - v0) / (255 - v0) * 100)))
+
+
+def touchscreen_present() -> bool:
+    if QtGui.QGuiApplication.instance() is None:
+        return False
+    try:
+        return any(d.type() == QtGui.QInputDevice.DeviceType.TouchScreen
+                   for d in QtGui.QInputDevice.devices())
+    except Exception:                               # noqa: BLE001
+        return False
 
 
 @dataclass
@@ -33,10 +72,25 @@ class Appearance:
     line_width: float = 1.6
     palette: str = "standard"
     grid: float = 0.25          # Deckkraft der Gitterlinien 0 … 1
+    plot_bg_custom: str = ""    # eigener Diagrammhintergrund (#rrggbb), leer = wie Farbschema
+    touch: str = "auto"         # Bedienung: auto | mouse | touch
 
     @property
     def dark(self) -> bool:
         return self.theme == "dark"
+
+    @property
+    def touch_active(self) -> bool:
+        if self.touch == "touch":
+            return True
+        if self.touch == "mouse":
+            return False
+        return touchscreen_present()
+
+    @property
+    def plot_dark(self) -> bool:
+        """Dunkler Diagrammhintergrund? Achsen, Schrift und Modellkurven richten sich danach."""
+        return luminance(self.plot_bg) < 0.18
 
     @property
     def colors(self) -> list[str]:
@@ -45,19 +99,21 @@ class Appearance:
     # Farben für Diagramme und Statusanzeigen
     @property
     def plot_bg(self) -> str:
-        return "#1b1d21" if self.dark else "#ffffff"
+        if self.plot_bg_custom and QtGui.QColor(self.plot_bg_custom).isValid():
+            return QtGui.QColor(self.plot_bg_custom).name()
+        return PLOT_BG_DARK if self.dark else PLOT_BG_LIGHT
 
     @property
     def plot_fg(self) -> str:
-        return "#d6d6d6" if self.dark else "#333333"
+        return "#d6d6d6" if self.plot_dark else "#2a2a2a"
 
     @property
     def model(self) -> str:          # Modellkurven (gestrichelt)
-        return "#f0f0f0" if self.dark else "#000000"
+        return "#f0f0f0" if self.plot_dark else "#000000"
 
     @property
     def model2(self) -> str:
-        return "#a0a0a0" if self.dark else "#555555"
+        return "#a0a0a0" if self.plot_dark else "#4a4a4a"
 
     @property
     def ok(self) -> str:
@@ -128,8 +184,9 @@ class Appearance:
         return "#99a3b0" if self.dark else "#667185"
 
 
-def apply_palette(app: QtWidgets.QApplication, dark: bool) -> None:
+def apply_palette(app: QtWidgets.QApplication, ap: "Appearance") -> None:
     """Feste Qt-Palette – unabhängig vom Dunkelmodus des Betriebssystems."""
+    dark = ap.dark
     hints = app.styleHints()
     if hasattr(hints, "setColorScheme"):           # Qt ≥ 6.8
         try:
@@ -164,7 +221,7 @@ def apply_palette(app: QtWidgets.QApplication, dark: bool) -> None:
     pal.setColor(P.Disabled, P.Base, C(disabled[1]))
     pal.setColor(P.Disabled, P.Button, C(disabled[2]))
     app.setPalette(pal)
-    app.setStyleSheet(stylesheet(Appearance(theme="dark" if dark else "light")))
+    app.setStyleSheet(stylesheet(ap))
     # Stylesheets mit palette(...)-Verweisen neu auswerten
     for w in app.allWidgets():
         if w.styleSheet():
@@ -314,6 +371,39 @@ QLabel#tileLabel {{ color: {a.muted}; font-size: 11px; font-weight: 600; backgro
 QLabel#tileValue {{ color: {a.text}; font-size: 21px; font-weight: 700; background: transparent; }}
 QLabel#tileUnit {{ color: {a.muted}; font-size: 12px; background: transparent; padding-bottom: 3px; }}
 QLabel#tileTitle {{ font-size: 13px; color: {a.text}; }}
+""" + (touch_stylesheet(a) if a.touch_active else "")
+
+
+def touch_stylesheet(a: Appearance) -> str:
+    """Große Bedienelemente für Finger (Surface & Co.) – ergänzt das normale Stylesheet."""
+    return f"""
+QPushButton, QToolButton {{ min-height: 34px; padding: 6px 16px; border-radius: 10px; }}
+QPushButton#primary {{ min-height: 52px; font-size: 17px; border-radius: 13px; }}
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{ min-height: 34px; padding: 4px 8px; border-radius: 9px; }}
+QComboBox {{ padding-right: 40px; }}
+QComboBox::drop-down {{ width: 38px; }}
+QComboBox::down-arrow {{ width: 16px; height: 16px; }}
+QComboBox QAbstractItemView::item {{ min-height: 40px; padding: 2px 8px; }}
+QSpinBox, QDoubleSpinBox {{ padding-right: 44px; }}
+QSpinBox::up-button, QDoubleSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::down-button {{
+    width: 40px; }}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow, QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
+    width: 14px; height: 14px; }}
+QCheckBox {{ spacing: 10px; min-height: 34px; }}
+QCheckBox::indicator, QGroupBox::indicator {{ width: 26px; height: 26px; border-radius: 7px; }}
+QListView::indicator, QTableView::indicator {{ width: 24px; height: 24px; border-radius: 6px; }}
+QListWidget::item, QListView::item {{ min-height: 36px; padding: 4px 6px; }}
+QTabBar::tab {{ padding: 13px 13px 11px 13px; }}
+QHeaderView::section {{ padding: 8px 8px; }}
+QScrollBar:vertical {{ width: 22px; }}
+QScrollBar:horizontal {{ height: 22px; }}
+QScrollBar::handle {{ border-radius: 7px; min-height: 48px; min-width: 48px; }}
+QMenuBar::item {{ padding: 10px 14px; }}
+QMenu::item {{ padding: 12px 34px 12px 30px; }}
+QSlider {{ min-height: 34px; }}
+QSlider::groove:horizontal {{ height: 8px; border-radius: 4px; }}
+QSlider::handle:horizontal {{ width: 28px; height: 28px; margin: -10px 0; border-radius: 14px; }}
+QSlider::sub-page:horizontal {{ border-radius: 4px; }}
 """
 
 
@@ -334,11 +424,11 @@ class AppearanceManager(QtCore.QObject):
         self.settings.setValue("appearance", json.dumps(asdict(ap)))
         app = QtWidgets.QApplication.instance()
         if app is not None:
-            apply_palette(app, ap.dark)
+            apply_palette(app, ap)
         self.changed.emit()
 
     def apply_initial(self, app: QtWidgets.QApplication) -> None:
-        apply_palette(app, self.current.dark)
+        apply_palette(app, self.current)
 
     def style_plot(self, plot_item: pg.PlotItem) -> None:
         a = self.current
@@ -361,16 +451,82 @@ def appearance() -> AppearanceManager:
     return _manager
 
 
+def keep_scroll_wide_enough(scroll: QtWidgets.QScrollArea, base: int) -> None:
+    """Mindestbreite eines senkrecht scrollenden Bereichs an seinen Inhalt anpassen – im Touch-Modus
+    sind die Felder größer, sonst würde der Inhalt rechts abgeschnitten."""
+    def fit():
+        try:
+            inner = scroll.widget()
+            if inner is None:
+                return
+            need = inner.minimumSizeHint().width() + scroll.verticalScrollBar().sizeHint().width() + 4
+            scroll.setMinimumWidth(max(base, need))
+        except RuntimeError:                        # Widget schon gelöscht
+            pass
+
+    def later():
+        QtCore.QTimer.singleShot(0, scroll, fit)
+
+    appearance().changed.connect(later)
+    later()
+
+
 class AppearanceDialog(QtWidgets.QDialog):
+    """Farbschema, Diagrammhintergrund, Bedienung (Maus/Touch), Linien und Kurvenfarben.
+
+    Hintergrund und Bedienung wirken sofort als Vorschau; „Abbrechen“ nimmt alles zurück."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Darstellung")
         a = appearance().current
+        self._orig = a
+        self._bg_custom = a.plot_bg_custom
         form = QtWidgets.QFormLayout(self)
         self.theme = QtWidgets.QComboBox()
         for k, v in THEMES.items():
             self.theme.addItem(v, k)
         self.theme.setCurrentIndex(self.theme.findData(a.theme))
+
+        # Diagrammhintergrund: Schieberegler dunkel → grau → weiß, dazu freie Farbe
+        bg = QtWidgets.QWidget()
+        bl = QtWidgets.QGridLayout(bg)
+        bl.setContentsMargins(0, 0, 0, 0)
+        bl.setHorizontalSpacing(6)
+        bl.setVerticalSpacing(2)
+        self.bg_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.bg_slider.setRange(0, 100)
+        self.bg_slider.setPageStep(10)
+        self.bg_slider.setTracking(False)           # erst beim Loslassen umfärben (flüssiger)
+        self.bg_slider.setMinimumWidth(180)
+        self.bg_slider.setToolTip("Dunkel ← Grau → Weiß")
+        self.bg_slider.setValue(level_for(a.plot_bg))
+        self.bg_slider.valueChanged.connect(self._bg_from_slider)
+        self.bg_slider.sliderMoved.connect(self._bg_swatch_preview)
+        self.bg_color = QtWidgets.QPushButton()
+        self.bg_color.setToolTip("Beliebige Farbe wählen …")
+        self.bg_color.setMinimumWidth(72)
+        self.bg_color.clicked.connect(self._bg_pick)
+        self.bg_reset = QtWidgets.QPushButton("Wie Farbschema")
+        self.bg_reset.setToolTip("Diagrammhintergrund wieder automatisch (hell: weiß, dunkel: fast schwarz)")
+        self.bg_reset.clicked.connect(self._bg_default)
+        bl.addWidget(self.bg_slider, 0, 0, 1, 3)
+        for col, (text, align) in enumerate((("dunkel", QtCore.Qt.AlignLeft), ("grau", QtCore.Qt.AlignHCenter),
+                                             ("weiß", QtCore.Qt.AlignRight))):
+            lab = QtWidgets.QLabel(text)
+            lab.setStyleSheet("color: palette(placeholder-text); font-size: 11px;")
+            bl.addWidget(lab, 1, col, align)
+        bl.addWidget(self.bg_color, 0, 3)
+        bl.addWidget(self.bg_reset, 0, 4)
+
+        self.touch = QtWidgets.QComboBox()
+        for k, v in TOUCH_MODES.items():
+            if k == "auto":
+                v += " – erkannt" if touchscreen_present() else " – keiner erkannt"
+            self.touch.addItem(v, k)
+        self.touch.setCurrentIndex(max(self.touch.findData(a.touch), 0))
+        self.touch.currentIndexChanged.connect(self._preview)
+
         self.width = QtWidgets.QDoubleSpinBox()
         self.width.setRange(0.5, 6.0)
         self.width.setSingleStep(0.5)
@@ -388,12 +544,15 @@ class AppearanceDialog(QtWidgets.QDialog):
         self.recolor = QtWidgets.QCheckBox("Vorhandene Messungen neu einfärben")
         self.recolor.setChecked(True)
         form.addRow("Farbschema:", self.theme)
+        form.addRow("Diagrammhintergrund:", bg)
+        form.addRow("Bedienung:", self.touch)
         form.addRow("Linienstärke:", self.width)
         form.addRow("Gitterlinien:", self.grid)
         form.addRow("Kurvenfarben:", self.palette)
         form.addRow(self.recolor)
         hint = QtWidgets.QLabel("Einzelne Kurven lassen sich zusätzlich im Tab „Impedanz“ über "
-                                "„Farbe …“ umfärben.")
+                                "„Farbe …“ umfärben. Hintergrund und Bedienung wirken sofort; "
+                                "„Abbrechen“ stellt den vorherigen Zustand wieder her.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: palette(placeholder-text);")
         form.addRow(hint)
@@ -402,6 +561,7 @@ class AppearanceDialog(QtWidgets.QDialog):
         bb.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self.apply)
         form.addRow(bb)
         self._applied = False
+        self._update_swatch()
 
     @staticmethod
     def _swatch(cols: list[str]) -> QtGui.QIcon:
@@ -413,14 +573,71 @@ class AppearanceDialog(QtWidgets.QDialog):
         p.end()
         return QtGui.QIcon(pm)
 
+    # -- Diagrammhintergrund -------------------------------------------------
+    def _current_bg(self) -> str:
+        return Appearance(theme=self.theme.currentData(), plot_bg_custom=self._bg_custom).plot_bg
+
+    def _update_swatch(self, color: str | None = None):
+        c = color or self._current_bg()
+        a = appearance().current
+        self.bg_color.setText("Farbe …")
+        fg = "#ffffff" if luminance(c) < 0.18 else "#1b2430"
+        self.bg_color.setStyleSheet(f"QPushButton {{ background: {c}; color: {fg}; "
+                                    f"border: 1px solid {a.border_strong}; }}")
+        self.bg_reset.setEnabled(bool(self._bg_custom))
+
+    def _bg_swatch_preview(self, level: int):
+        self._update_swatch(gray_for(level))
+
+    def _bg_from_slider(self, level: int):
+        self._bg_custom = gray_for(level)
+        self._update_swatch()
+        self._preview()
+
+    def _bg_pick(self):
+        from .de import germanize
+        dlg = QtWidgets.QColorDialog(QtGui.QColor(self._current_bg()), self)
+        dlg.setWindowTitle("Diagrammhintergrund")
+        bb = dlg.findChild(QtWidgets.QDialogButtonBox)
+        if bb is not None:
+            germanize(bb)
+        if dlg.exec() == QtWidgets.QDialog.Accepted and dlg.selectedColor().isValid():
+            self._set_bg(dlg.selectedColor().name())
+
+    def _bg_default(self):
+        self._set_bg("")
+
+    def _set_bg(self, custom: str):
+        self._bg_custom = custom
+        self.bg_slider.blockSignals(True)
+        self.bg_slider.setValue(level_for(self._current_bg()))
+        self.bg_slider.blockSignals(False)
+        self._update_swatch()
+        self._preview()
+
+    # ------------------------------------------------------------------------
     def value(self) -> Appearance:
         return Appearance(theme=self.theme.currentData(), line_width=self.width.value(),
-                          palette=self.palette.currentData(), grid=self.grid.value() / 100)
+                          palette=self.palette.currentData(), grid=self.grid.value() / 100,
+                          plot_bg_custom=self._bg_custom, touch=self.touch.currentData())
+
+    def _preview(self):
+        """Sofort-Vorschau: nur Hintergrund und Bedienung, der Rest wartet auf OK/Übernehmen."""
+        cur = appearance().current
+        appearance().set(replace(cur, plot_bg_custom=self._bg_custom, touch=self.touch.currentData()))
+        self._update_swatch()
+        self.adjustSize()
 
     def apply(self):
         appearance().set(self.value())
         self._applied = True
+        self._orig = appearance().current
 
     def accept(self):
         self.apply()
         super().accept()
+
+    def reject(self):
+        if appearance().current != self._orig:
+            appearance().set(self._orig)
+        super().reject()

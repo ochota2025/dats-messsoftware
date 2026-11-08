@@ -9,7 +9,7 @@ from ..analysis.ts import (NEEDS_SECOND_MEASUREMENT, VAS_METHOD_LABELS, VasMetho
 from .. import __version__
 from ..io.formats import export_parameters
 from ..io.ts_export import PROFILES, profile_text, save_text, tsp_text
-from .appearance import appearance
+from .appearance import appearance, keep_scroll_wide_enough
 from .de import ask
 from .plots import Curve, ImpedancePlot
 from .state import AppState
@@ -167,6 +167,7 @@ class TSTab(QtWidgets.QWidget):
         scroll.setWidget(left)
         scroll.setWidgetResizable(True)
         scroll.setMinimumWidth(360)
+        keep_scroll_wide_enough(scroll, 360)
 
         # ---- Ergebnisse ---------------------------------------------------
         self.table = QtWidgets.QTableWidget(0, 3)

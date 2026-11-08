@@ -478,3 +478,47 @@ def test_whats_new_shows_history_below_news():
     news, history = md.split("# Frühere Versionen")
     assert "## 0.2.6" in news and "## 0.2.5" not in news
     assert "## 0.2.5" in history and "## 0.1.0" in history
+
+
+# ---- Darstellung: Taskleiste, Diagrammhintergrund, Touch ---------------------------------
+
+def test_taskbar_relaunch_properties(monkeypatch, tmp_path):
+    """Angeheftet: Neustart über pythonw.exe (kein Konsolenfenster), eigenes Symbol, gleiche App-ID."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from datsmess.gui import icon
+    scripts = tmp_path / "Scripts"
+    scripts.mkdir()
+    (scripts / "pythonw.exe").write_text("")
+    monkeypatch.setattr(icon.sys, "executable", str(scripts / "python.exe"))
+    props = icon.relaunch_properties()
+    assert list(props) == [2, 4, 3, 5]                     # Relaunch-Angaben vor der ID
+    assert props[2] == f'"{scripts / "pythonw.exe"}" -m datsmess'
+    assert props[3].endswith("icon.ico,0") and (icon.RESOURCES / "icon.ico").exists()
+    assert props[5] == icon.APP_ID
+    if icon.sys.platform != "win32":
+        assert icon.set_window_relaunch(object()) is False
+
+
+def test_plot_background_and_touch_stylesheet():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6 import QtWidgets
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from datsmess.gui.appearance import Appearance, gray_for, level_for, stylesheet
+    assert Appearance().plot_bg == "#ffffff" and not Appearance().plot_dark
+    assert Appearance(theme="dark").plot_dark
+    # Schieberegler dunkel → weiß, Umkehrung passt
+    assert gray_for(100) == "#ffffff" and level_for(gray_for(0)) == 0
+    for lv in (0, 30, 55, 80, 100):
+        assert abs(level_for(gray_for(lv)) - lv) <= 1
+    # Achsen/Modellkurven richten sich nach dem Hintergrund, nicht nach dem Farbschema
+    light_on_dark = Appearance(theme="light", plot_bg_custom=gray_for(5))
+    assert light_on_dark.plot_dark and light_on_dark.model == "#f0f0f0"
+    grey = Appearance(theme="dark", plot_bg_custom=gray_for(70))
+    assert not grey.plot_dark and grey.model == "#000000"
+    assert Appearance(plot_bg_custom="kaputt").plot_bg == "#ffffff"
+    # Touch: Zusatz-Stylesheet mit großen Knöpfen nur im Touch-Modus
+    assert "min-height: 34px" in stylesheet(Appearance(touch="touch"))
+    assert "min-height: 34px" not in stylesheet(Appearance(touch="mouse"))
+    del app

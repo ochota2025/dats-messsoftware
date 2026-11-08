@@ -93,7 +93,9 @@ Ohne angeschlossenes DATS läuft ein eingebauter Simulator mit einem virtuellen 
   Kurven, die auf keinem Platz liegen. So sieht man nur die abgelegten Plätze plus die
   neueste Messung (grau).
 - Die Plätze werden im Projekt (*Datei → Projekt speichern*) mitgespeichert.
-- **Ansicht → Darstellung …**: hell/dunkel, Kurvenfarben, Linienstärke, Gitterlinien.
+- **Ansicht → Darstellung …**: hell/dunkel, Diagrammhintergrund (dunkel … grau … weiß oder eigene Farbe),
+  Bedienung mit Maus oder Touch (große Schaltflächen), Kurvenfarben, Linienstärke, Gitterlinien.
+- **Ansicht → Große Schaltflächen (Touch)**: schaltet die Touch-Bedienung schnell ein und aus.
 
 **Kennwerte (rechts oben):** Nach jeder Treibermessung stehen dort sofort fs, Re, Qms, Qes,
 Qts, Zmax und Le – je eine Spalte pro sichtbarer Kurve (#1 … #8 = Speicherplatz, „neu“ = neueste

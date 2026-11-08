@@ -18,7 +18,7 @@ from ..io import project as projio
 from ..io.watch import WatchFolderConfig
 from ..measurement import ChannelConfig
 from . import errors, help as helpdlg
-from .appearance import AppearanceDialog, appearance
+from .appearance import AppearanceDialog, appearance, keep_scroll_wide_enough
 from .calibration_wizard import CalibrationWizard
 from .compare_tab import CompareTab
 from .correction_tab import CorrectionTab
@@ -119,6 +119,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.projectChanged.connect(self._update_title)
         self.state.failed.connect(lambda title, msg: errors.show_error(self, title, msg))
         appearance().changed.connect(self._appearance_changed)
+        self._fit_controls()
         self.imp_tab.slot_bar.useForTS.connect(self._slot_for_ts)
         self.imp_tab.slot_bar.exportSlot.connect(
             lambda i: self.imp_tab.export_selected([self.state.slot_measurement(i)]))
@@ -363,10 +364,24 @@ class MainWindow(QtWidgets.QMainWindow):
         if cur.dark != on:
             appearance().set(replace(cur, theme="dark" if on else "light"))
 
+    def _toggle_touch(self, on: bool):
+        cur = appearance().current
+        if cur.touch_active != on:
+            appearance().set(replace(cur, touch="touch" if on else "mouse"))
+
     def _appearance_changed(self):
-        self.act_dark.blockSignals(True)
-        self.act_dark.setChecked(appearance().current.dark)
-        self.act_dark.blockSignals(False)
+        a = appearance().current
+        for act, on in ((self.act_dark, a.dark), (self.act_touch, a.touch_active)):
+            act.blockSignals(True)
+            act.setChecked(on)
+            act.blockSignals(False)
+        self._fit_controls()
+
+    def _fit_controls(self):
+        """Größen, die das Stylesheet nicht regelt: die kleinen Knöpfe neben der Geräteauswahl."""
+        touch = appearance().current.touch_active
+        for b in self._small_buttons:
+            b.setFixedWidth(46 if touch else 30)
         self._update_cal_status()
 
     def edit_watch(self):
@@ -420,7 +435,8 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_manual.setText("⚙")
         btn_manual.setToolTip("Eingang und Ausgang einzeln wählen … (wie im Original-Programm)")
         btn_manual.clicked.connect(self.open_device_dialog)
-        for b in (btn_refresh, btn_manual):
+        self._small_buttons = (btn_refresh, btn_manual)
+        for b in self._small_buttons:
             b.setFixedWidth(30)
             b.setStyleSheet("padding: 3px 0;")
         row.setSpacing(4)
@@ -532,6 +548,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sidebar_scroll.setWidget(w)
         self.sidebar_scroll.setWidgetResizable(True)
         self.sidebar_scroll.setMinimumWidth(375)
+        keep_scroll_wide_enough(self.sidebar_scroll, 375)
         self.sidebar_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.sidebar_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
 
@@ -607,6 +624,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_dark.setChecked(appearance().current.dark)
         self.act_dark.setShortcut(QtGui.QKeySequence("Ctrl+Shift+D"))
         self.act_dark.toggled.connect(self._toggle_dark)
+        self.act_touch = m_view.addAction("Große Schaltflächen (Touch)")
+        self.act_touch.setCheckable(True)
+        self.act_touch.setChecked(appearance().current.touch_active)
+        self.act_touch.setToolTip("Für Touchscreens (z. B. Surface): größere Knöpfe, Listen und Regler")
+        self.act_touch.toggled.connect(self._toggle_touch)
         m_help = mb.addMenu("&Hilfe")
         a = m_help.addAction("Erste Schritte", lambda: helpdlg.show_guide(self))
         a.setShortcut(QtGui.QKeySequence.HelpContents)
@@ -641,7 +663,9 @@ class MainWindow(QtWidgets.QMainWindow):
                              f"{'passt' if cal.is_compatible(sw) else 'passt NICHT zum Sweep'}"),
             "Messungen im Projekt": str(len(self.state.measurements)),
             "Aktiver Tab": self.tabs.tabText(self.tabs.currentIndex()),
-            "Darstellung": "dunkel" if appearance().current.dark else "hell",
+            "Darstellung": ("dunkel" if appearance().current.dark else "hell")
+            + (f", Diagramm {appearance().current.plot_bg}" if appearance().current.plot_bg_custom else "")
+            + (", Touch" if appearance().current.touch_active else ""),
         }
         last = self.state.current_measurement()
         if last is not None and last.meta.get("quality"):

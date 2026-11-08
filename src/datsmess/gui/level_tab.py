@@ -28,7 +28,7 @@ def _levels(start: float, stop: float, step: float) -> list[float]:
 def _gradient(i: int, n: int) -> str:
     """Farbverlauf leise (blau) → laut (rot)."""
     t = i / max(1, n - 1)
-    c = QtGui.QColor.fromHsvF(0.62 - 0.62 * t, 0.85, 0.9 if not appearance().current.dark else 1.0)
+    c = QtGui.QColor.fromHsvF(0.62 - 0.62 * t, 0.85, 0.9 if not appearance().current.plot_dark else 1.0)
     return c.name()
 
 

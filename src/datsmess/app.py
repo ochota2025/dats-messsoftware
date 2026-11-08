@@ -42,6 +42,9 @@ def main() -> int:
     from .gui.main_window import MainWindow
 
     w = MainWindow()
+    from .gui.icon import set_window_relaunch
+
+    set_window_relaunch(w)              # Anheften an die Taskleiste: eigenes Symbol, richtiger Start
     w.show()
     w.after_start()
     code = app.exec()

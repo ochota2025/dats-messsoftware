@@ -29,7 +29,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 92 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 94 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -88,7 +88,7 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Installation ist editierbar (`pip install -e .`); das Flag `.venv/datsmess-editable.flag`
   steuert die einmalige Neu-Einbindung nach einem Update.
 
-## Stand und offene Punkte (08.11.2026, Version 0.2.12)
+## Stand und offene Punkte (08.11.2026, Version 0.2.13)
 
 **Läuft:** beim Tester unter Windows mit dem Simulator; Design im Stil des Icons (hell/dunkel),
 Kennwert-Kacheln, ausblendbare Seitenleiste, Qualitäts-Ampel, Geräte-Check, Pegelreihe, Vergleich,
@@ -101,6 +101,11 @@ echten Geräteliste des Testers bestätigt (Testfall in `tests/test_features.py`
   Messgenauigkeit. Plan dafür: Geräte-Check → Kalibrierung → bekannten Widerstand messen →
   denselben Treiber mit Original-Software (Export .zma) und unserer messen, im Tab „Vergleich“
   übereinanderlegen.
+- **Taskleisten-Anheften unter Windows** (0.2.13): `icon.set_window_relaunch` setzt per
+  `SHGetPropertyStoreForWindow` RelaunchCommand/-Icon/-Name + AppUserModelID am Hauptfenster –
+  nur per Code geprüft. Alte Pins müssen einmal gelöst und neu angeheftet werden.
+- **Touch-Modus** (0.2.13, `Appearance.touch`, `touch_stylesheet`) nur am Mac offscreen angesehen,
+  nie mit echtem Touchscreen. Pinch-Zoom in Diagrammen gibt es noch nicht (pyqtgraph: nur Ziehen).
 - Selbst-Update **mit Neustart unter Windows** (seit 0.2.9; der Tester kam bis dahin über den alten
   Skript-Weg). `--wait-pid`-Neustart unter Windows nur per Code geprüft.
 
