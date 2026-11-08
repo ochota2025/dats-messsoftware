@@ -10,6 +10,7 @@ import json
 from ..io.formats import FORMATS, TextExportOptions, export_impedance, import_impedance
 from ..measurement import Measurement, reprocess
 from .de import get_item, get_text
+from .params_panel import QuickParams
 from .slots import SlotBar
 from .dialogs import ExportDialog
 from .plots import SMOOTHING, VIEWS, Curve, ImpedancePlot, display_data
@@ -51,9 +52,12 @@ class ImpedanceTab(QtWidgets.QWidget):
 
         # Messliste
         side = QtWidgets.QWidget()
-        side.setMaximumWidth(300)
+        side.setMaximumWidth(340)
+        side.setMinimumWidth(250)
         sl = QtWidgets.QVBoxLayout(side)
         sl.setContentsMargins(0, 0, 0, 0)
+        self.params = QuickParams(state)
+        sl.addWidget(self.params)
         sl.addWidget(QtWidgets.QLabel("<b>Messungen</b> (Haken = im Diagramm)"))
         self.list = QtWidgets.QListWidget()
         self.list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)

@@ -123,6 +123,22 @@ def _mass(eng, sim):
     return m.f, m.Z
 
 
+@pytest.mark.parametrize("conn,is_driver", [
+    ("driver", True), ("driver_mass", True), ("driver_box", True), ("resistor", False),
+    ("capacitor", False), ("inductor", False), ("open", False), ("short", False), ("cal", False),
+])
+def test_quick_parameters_only_for_drivers(setup, conn, is_driver):
+    from datsmess.analysis.ts import quick_parameters
+    eng, sim = setup
+    sim.set_connection(conn)
+    m, _ = eng.measure_impedance()
+    q = quick_parameters(m.f, m.Z)
+    assert (q is not None) == is_driver
+    if conn == "driver":
+        assert q.fs == pytest.approx(sim.driver.fs, rel=0.005)
+        assert q.Qts == pytest.approx(sim.driver.Qms * sim.driver.Qes / (sim.driver.Qms + sim.driver.Qes), rel=0.02)
+
+
 @pytest.mark.parametrize("conn,kind,key,attr,tol", [
     ("capacitor", "C", "C", "capacitor", 0.01),
     ("inductor", "L", "L", "inductor", 0.01),

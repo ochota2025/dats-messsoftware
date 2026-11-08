@@ -86,6 +86,11 @@ Ohne angeschlossenes DATS läuft ein eingebauter Simulator mit einem virtuellen 
 - Die Plätze werden im Projekt (*Datei → Projekt speichern*) mitgespeichert.
 - **Ansicht → Darstellung …**: hell/dunkel, Kurvenfarben, Linienstärke, Gitterlinien.
 
+**Kennwerte (rechts oben):** Nach jeder Treibermessung stehen dort sofort fs, Re, Qms, Qes,
+Qts, Zmax und Le – je eine Spalte pro sichtbarer Kurve (#1 … #8 = Speicherplatz, „neu“ = neueste
+Messung). So lassen sich Chassis direkt vergleichen. Bei Widerständen, Kondensatoren usw.
+steht „–“. Vas, Mms und Bl brauchen eine Zweitmessung (Tab „T/S-Parameter“).
+
 ## 7. Mit echtem DATS V3
 
 1. DATS per USB anschließen und das Programm starten.

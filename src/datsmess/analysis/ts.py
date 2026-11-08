@@ -170,6 +170,36 @@ def fit_driver(f: np.ndarray, Z: np.ndarray, *, re_dc: float | None = None, fix_
     return fit
 
 
+def looks_like_driver(f: np.ndarray, Z: np.ndarray, f_lo: float = 3.0, f_hi: float = 5000.0) -> bool:
+    """Grobe Prüfung auf eine Lautsprecherresonanz: Phasendurchgang von + nach − bei einer
+    Impedanz, die deutlich (≥ 1,5×) über dem kleinsten Realteil liegt. Widerstände, Kondensatoren,
+    Spulen und offene/kurze Klemmen fallen damit heraus."""
+    f = np.asarray(f, float)
+    Z = np.asarray(Z, complex)
+    m = (f >= f_lo) & (f <= f_hi)
+    if m.sum() < 20:
+        return False
+    fm, zm = f[m], smooth_octave(f, Z, 24)[m]
+    re_min = float(np.min(zm.real))
+    if not np.isfinite(re_min) or re_min <= 0:
+        return False
+    ph = np.angle(zm)
+    idx = np.where((ph[:-1] > 0) & (ph[1:] <= 0))[0]
+    return bool(np.any(np.abs(zm[idx]) > 1.5 * re_min))
+
+
+def quick_parameters(f: np.ndarray, Z: np.ndarray, max_error: float = 0.15) -> ImpedanceFit | None:
+    """Kennwerte, die schon aus einer einzelnen Freiluftmessung feststehen (fs, Re, Q, Le …).
+    ``None``, wenn die Kurve nicht nach einem Lautsprecher aussieht."""
+    if not looks_like_driver(f, Z):
+        return None
+    try:
+        fit = fit_driver(f, Z)
+    except (ValueError, RuntimeError, FloatingPointError):
+        return None
+    return fit if fit.rms_error <= max_error else None
+
+
 # --------------------------------------------------------------------------
 # Vas-Methoden und Ableitung aller Parameter
 # --------------------------------------------------------------------------
