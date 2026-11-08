@@ -85,15 +85,23 @@ def show_guide(parent) -> None:
 
 
 def whats_new_markdown(since: str | None = None) -> str:
+    """Nach einem Update: oben das Neue seit ``since``, darunter alle früheren Versionen."""
     md = updates.local_changelog()
     if not md:
         return f"# Version {__version__}\n\nKeine Änderungsliste gefunden."
+    sections = updates.split_sections(md)
     if since:
-        newer = updates.sections_newer_than(md, since)
+        newer = [(h, b) for h, b in sections if updates.is_newer(h, since)]
+        older = [(h, b) for h, b in sections if not updates.is_newer(h, since)]
         if newer:
-            return f"# Neu seit Version {since}\n\n{newer}"
+            out = [f"# Neu seit deiner Version {since}", ""]
+            out += [f"## {h}\n\n{b}\n" for h, b in newer]
+            if older:
+                out += ["---", "", "# Frühere Versionen", ""]
+                out += [f"## {h}\n\n{b}\n" for h, b in older]
+            return "\n".join(out)
     return md
 
 
 def show_whats_new(parent, since: str | None = None) -> None:
-    MarkdownDialog(parent, "Was ist neu?", whats_new_markdown(since)).exec()
+    MarkdownDialog(parent, "Was ist neu?", whats_new_markdown(since), size=(760, 700)).exec()

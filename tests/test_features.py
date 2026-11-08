@@ -467,3 +467,14 @@ def test_wait_for_pid_returns_after_exit():
     t = time.monotonic()
     wait_for_pid(pid, timeout=10)
     assert time.monotonic() - t < 5
+
+
+def test_whats_new_shows_history_below_news():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from datsmess.gui import help as helpdlg
+    md = helpdlg.whats_new_markdown("0.2.5")
+    assert md.startswith("# Neu seit deiner Version 0.2.5")
+    news, history = md.split("# Frühere Versionen")
+    assert "## 0.2.6" in news and "## 0.2.5" not in news
+    assert "## 0.2.5" in history and "## 0.1.0" in history

@@ -1,5 +1,10 @@
 # Neuerungen
 
+## 0.2.12 – 08.11.2026
+
+- „Was ist neu?“ nach einem Update zeigt oben, was seit deiner letzten Version neu ist, und darunter
+  die komplette Geschichte aller früheren Versionen.
+
 ## 0.2.11 – 08.11.2026
 
 - Bei festgelegten Frequenzbereichen („Hörbereich“, „Bereich festlegen …“) stehen die
