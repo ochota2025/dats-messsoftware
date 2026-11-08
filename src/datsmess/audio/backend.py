@@ -101,6 +101,19 @@ def list_devices() -> list[DeviceInfo]:
     return out
 
 
+def rescan_devices() -> bool:
+    """PortAudio neu initialisieren: Die Geräteliste wird nur beim Initialisieren gelesen, neu
+    eingesteckte Geräte (z. B. das DATS) erscheinen sonst erst nach einem Programmneustart.
+    Vorher alle Audioströme stoppen."""
+    try:
+        import sounddevice as sd
+        sd._terminate()
+        sd._initialize()
+        return True
+    except Exception:          # noqa: BLE001
+        return False
+
+
 def find_dats(devices: list[DeviceInfo] | None = None) -> DeviceInfo | None:
     for d in devices if devices is not None else list_devices():
         if d.looks_like_dats and d.max_in > 0 and d.max_out > 0:
@@ -158,10 +171,11 @@ class DeviceChoice:
     usable: bool                      # auswählbar
     reason: str                       # Erklärung für den Tooltip
     alternatives: list[str] = field(default_factory=list)
+    marked: bool = False              # vom Nutzer bzw. Geräte-Check als DATS bestätigt
 
     @property
     def is_dats(self) -> bool:
-        return any(d is not None and d.looks_like_dats for d in (self.inp, self.out))
+        return self.marked or any(d is not None and d.looks_like_dats for d in (self.inp, self.out))
 
     @property
     def dimmed(self) -> bool:
@@ -221,8 +235,10 @@ def _pair_reason(inp: DeviceInfo, out: DeviceInfo, api: str, ok_fs: bool, fs: in
     return "\n".join(lines)
 
 
-def device_choices(devices: list[DeviceInfo], fs: int, supports=None) -> list[DeviceChoice]:
-    """Einträge für die Geräteauswahl. ``supports(inp, out, fs)`` ist für Tests austauschbar."""
+def device_choices(devices: list[DeviceInfo], fs: int, supports=None,
+                   dats_keys=frozenset()) -> list[DeviceChoice]:
+    """Einträge für die Geräteauswahl. ``supports(inp, out, fs)`` ist für Tests austauschbar;
+    ``dats_keys`` sind Geräte, die als DATS bestätigt wurden (auch wenn der Name es nicht verrät)."""
     if supports is None:
         try:
             import sounddevice as sd
@@ -265,6 +281,11 @@ def device_choices(devices: list[DeviceInfo], fs: int, supports=None) -> list[De
     out_list = [DeviceChoice(inp, out, out.hostapi, True, _pair_reason(inp, out, out.hostapi, ok, fs),
                              sorted(a for a in apis if a != out.hostapi))
                 for _rank, inp, out, apis, ok in best.values()]
+
+    for c in out_list:
+        if c.key in dats_keys:
+            c.marked = True
+            c.reason = c.reason.replace("Kein DATS erkannt.", "Als DATS bestätigt.")
 
     # 3) übrig gebliebene reine Ein- oder Ausgänge: anzeigen, aber nicht auswählbar
     singles: dict[str, DeviceInfo] = {}

@@ -306,3 +306,15 @@ def test_device_choices_real_windows_laptop():
 def test_physical_name(name, expected):
     from datsmess.audio.backend import physical_name
     assert physical_name(name) == expected
+
+
+def test_device_marked_as_dats_by_key():
+    """Meldet sich das DATS unter fremdem Namen, kann es als DATS gemerkt werden."""
+    from datsmess.audio.backend import DeviceInfo as D, device_choices
+    devs = [D(0, "Lautsprecher (USB Audio CODEC)", "Windows WASAPI", 0, 2, 48000),
+            D(1, "Mikrofon (USB Audio CODEC)", "Windows WASAPI", 2, 0, 48000)]
+    plain = device_choices(devs, 48000, supports=lambda i, o, fs: True)[0]
+    assert not plain.is_dats and plain.dimmed
+    marked = device_choices(devs, 48000, supports=lambda i, o, fs: True, dats_keys={plain.key})[0]
+    assert marked.is_dats and not marked.dimmed and marked.label.startswith("★")
+    assert "Als DATS bestätigt" in marked.reason

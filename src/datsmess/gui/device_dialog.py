@@ -15,7 +15,7 @@ from .de import button_box
 API_LABELS = {
     "Windows WASAPI": "WASAPI (empfohlen)",
     "Windows DirectSound": "DirectSound",
-    "MME": "MME (wie das Original-Programm)",
+    "MME": "MME (älteste Schnittstelle)",
     "Windows WDM-KS": "WDM-KS (Kernel-Streaming)",
     "Core Audio": "Core Audio",
     "ALSA": "ALSA",
@@ -50,7 +50,7 @@ class DeviceDialog(QtWidgets.QDialog):
             "einzeln festlegen – wie im Original-Programm von Dayton.<br><br>"
             "<b>Beim DATS:</b> Eingang „Mikrofon (…DATS…)“, Ausgang „Lautsprecher (…DATS…)“. "
             "Eingang und Ausgang müssen dieselbe Schnittstelle verwenden. Macht WASAPI Probleme, "
-            "MME wählen – damit arbeitet auch das Original-Programm.")
+            "DirectSound oder MME versuchen.")
         intro.setWordWrap(True)
         intro.setTextFormat(QtCore.Qt.RichText)
         lay.addWidget(intro)

@@ -11,7 +11,8 @@ from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import __version__, diagnostics, updates
-from ..audio.backend import CONNECTIONS, SoundDeviceBackend, device_choices, list_devices, physical_name
+from ..audio.backend import (CONNECTIONS, SoundDeviceBackend, device_choices, list_devices, physical_name,
+                             rescan_devices)
 from ..audio.simulator import SimulatorBackend
 from ..io import project as projio
 from ..io.watch import WatchFolderConfig
@@ -107,7 +108,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._restore_settings()
         self._populate_devices(select_saved=True)
-        self.cb_fs.currentIndexChanged.connect(lambda: self._populate_devices())   # Schnittstelle je Rate
+        self.cb_fs.currentIndexChanged.connect(lambda: self._populate_devices(announce=False))
+        self._hotplug_timer = QtCore.QTimer(self)
+        self._hotplug_timer.setSingleShot(True)
+        self._hotplug_timer.timeout.connect(self._on_devices_changed)
+        try:                                        # Ein-/Ausstecken bemerken (ohne PortAudio zu stören)
+            from PySide6.QtMultimedia import QMediaDevices
+            self._media_devices = QMediaDevices(self)
+            self._media_devices.audioInputsChanged.connect(lambda: self._hotplug_timer.start(1500))
+            self._media_devices.audioOutputsChanged.connect(lambda: self._hotplug_timer.start(1500))
+        except Exception as e:                      # noqa: BLE001
+            log.info("Geräteüberwachung nicht verfügbar (%s) – ↻ liest die Liste neu ein", e)
         self.state.dirty = False
         self._update_title()
         self.state.status.emit("Bereit.")
@@ -380,7 +391,7 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_refresh = QtWidgets.QToolButton()
         btn_refresh.setText("↻")
         btn_refresh.setToolTip("Geräteliste aktualisieren")
-        btn_refresh.clicked.connect(lambda: self._populate_devices())
+        btn_refresh.clicked.connect(lambda: self._populate_devices(rescan=True))
         btn_manual = QtWidgets.QToolButton()
         btn_manual.setText("⚙")
         btn_manual.setToolTip("Eingang und Ausgang einzeln wählen … (wie im Original-Programm)")
@@ -552,6 +563,7 @@ class MainWindow(QtWidgets.QMainWindow):
         m_meas.addAction("Alle Speicherplätze leeren", self._clear_slots)
         m_meas.addSeparator()
         m_meas.addAction("Audio-Geräte einzeln wählen …", self.open_device_dialog)
+        m_meas.addAction("Gewähltes Gerät als DATS merken / vergessen", self._toggle_dats_mark)
         m_meas.addAction("Geräte-Check …", self.open_device_check)
         m_meas.addAction("Kalibrier-Assistent …", self.open_calibration)
         m_meas.addAction("Kalibrierung verwerfen", lambda: self.state.set_calibration(None))
@@ -678,16 +690,38 @@ class MainWindow(QtWidgets.QMainWindow):
             QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(updates.PROJECT_ROOT)))
 
     # -- Geräte ---------------------------------------------------------
-    def _populate_devices(self, select_saved: bool = False):
+    def _json_list(self, key: str) -> list[str] | None:
+        if not self.settings.contains(key):
+            return None
+        try:
+            v = json.loads(self.settings.value(key, "[]"))
+            return [x for x in v if isinstance(x, str)]
+        except (ValueError, TypeError):
+            return []
+
+    def _populate_devices(self, select_saved: bool = False, rescan: bool = False, announce: bool = True):
         """Geräteliste: ein Eintrag je Gerät (Ein- und Ausgang zusammengeführt, beste Schnittstelle).
-        Nicht geeignete Geräte stehen ausgegraut in der Liste, mit Erklärung im Tooltip."""
+        Nicht geeignete Geräte stehen ausgegraut in der Liste, mit Erklärung im Tooltip.
+
+        ``rescan`` liest die Geräte neu ein (PortAudio kennt sonst nur die Geräte vom Programmstart).
+        Neu aufgetauchte Geräte werden gemeldet: ein DATS wird gewählt, bei anderen Geräten mit
+        zwei Eingängen fragt das Programm, ob es das DATS ist."""
         if select_saved:
             saved = self.settings.value("device_key", "")
         else:
             saved = self.cb_device.currentData(KEY_ROLE) or ""
+        saved_name = self.cb_device.currentData(NAME_ROLE) if not select_saved else None
+        if rescan:
+            if self.state.backend.streaming:
+                self.state.stop_audio()
+            rescan_devices()
         fs = self.cb_fs.currentData() or 48000
         raw = list_devices()
-        choices = device_choices(raw, fs)
+        choices = device_choices(raw, fs, dats_keys=set(self._json_list("dats_keys") or []))
+        known = self._json_list("known_devices")
+        current = [c.key for c in choices if c.usable]
+        new = [c for c in choices if c.usable and known is not None and c.key not in known]
+        self.settings.setValue("known_devices", json.dumps(sorted(set(known or []) | set(current))))
         a = appearance().current
         self.cb_device.blockSignals(True)
         self.cb_device.clear()
@@ -726,6 +760,10 @@ class MainWindow(QtWidgets.QMainWindow):
                                        QtCore.Qt.ToolTipRole)
         self.lbl_device_hint.setVisible(n_grey > 0)
         idx = self.cb_device.findData(saved, KEY_ROLE) if saved else -1
+        lost = bool(saved) and saved != "sim" and idx < 0
+        new_dats = next((c for c in new if c.is_dats), None)
+        if new_dats is not None and announce:
+            idx = self.cb_device.findData(new_dats.key, KEY_ROLE)       # frisch eingestecktes DATS wählen
         if idx < 0 or not model.item(idx).isEnabled():
             dats = next((i for i in range(self.cb_device.count())
                          if self.cb_device.itemText(i).startswith("★")), None)
@@ -735,6 +773,64 @@ class MainWindow(QtWidgets.QMainWindow):
         log.info("Geräteliste (%g kHz): %s", fs / 1000,
                  "; ".join(f"{c.label}{'' if c.usable else ' [grau]'}" for c in choices) or "keine")
         self._device_changed()
+        if lost and saved_name:
+            self.state.status.emit(f"„{saved_name}“ ist nicht mehr verbunden – jetzt: {self.cb_device.currentText()}")
+        if announce and new:
+            QtCore.QTimer.singleShot(0, lambda: self._announce_new_devices(new))
+
+    def _announce_new_devices(self, new):
+        for c in new:
+            log.info("Neues Audiogerät: %s", c.label)
+            if c.is_dats:
+                self.state.status.emit(f"DATS erkannt und ausgewählt: {c.name} ({c.hostapi}).")
+                continue
+            if c.inp is None or c.inp.max_in < 2:
+                self.state.status.emit(f"Neues Audiogerät: {c.name} – nur ein Eingang, für die Messbrücke "
+                                       "nicht geeignet.")
+                continue
+            box = QtWidgets.QMessageBox(self)
+            box.setIcon(QtWidgets.QMessageBox.Question)
+            box.setWindowTitle("Neues Audiogerät erkannt")
+            box.setTextFormat(QtCore.Qt.RichText)
+            box.setText(f"Neu angeschlossen: <b>{c.name}</b><br>({c.hostapi}, {c.inp.max_in} Eingänge / "
+                        f"{c.out.max_out} Ausgänge)<br><br>Ist das das <b>DATS</b>?")
+            box.setInformativeText("Das DATS meldet sich je nach Windows-Version nicht immer mit seinem Namen. "
+                                   "Mit „Ja“ merkt sich das Programm das Gerät und wählt es künftig automatisch.")
+            yes = box.addButton("Ja, als DATS verwenden", QtWidgets.QMessageBox.YesRole)
+            box.addButton("Nein", QtWidgets.QMessageBox.NoRole)
+            box.exec()
+            if box.clickedButton() is yes:
+                self.mark_as_dats(c.key, True)
+
+    def mark_as_dats(self, key: str | None = None, on: bool = True):
+        """Gerät als DATS merken (oder vergessen) – wird dann mit ★ angezeigt und automatisch gewählt."""
+        key = key or self.cb_device.currentData(KEY_ROLE)
+        if not key or key in ("sim", "manual"):
+            return
+        keys = set(self._json_list("dats_keys") or [])
+        keys = keys | {key} if on else keys - {key}
+        self.settings.setValue("dats_keys", json.dumps(sorted(keys)))
+        self.settings.setValue("device_key", key if on else self.settings.value("device_key", ""))
+        log.info("Gerät %s als DATS %s", key, "gemerkt" if on else "vergessen")
+        self._populate_devices(select_saved=on, announce=False)
+        if on:
+            self.state.status.emit(f"Als DATS gemerkt: {self.cb_device.currentText()}")
+
+    def _toggle_dats_mark(self):
+        key = self.cb_device.currentData(KEY_ROLE)
+        if not key or key in ("sim", "manual"):
+            QtWidgets.QMessageBox.information(self, "Als DATS merken",
+                                              "Bitte zuerst links ein echtes Audiogerät auswählen.")
+            return
+        self.mark_as_dats(key, key not in set(self._json_list("dats_keys") or []))
+
+    def _on_devices_changed(self):
+        """Windows/macOS melden ein ein- oder ausgestecktes Audiogerät – Liste neu einlesen."""
+        if self.state.busy or self.state.backend.streaming:
+            self._hotplug_timer.start(3000)         # nicht mitten in eine Messung/Wiedergabe funken
+            return
+        log.info("Audiogeräte haben sich geändert – Liste wird neu eingelesen")
+        self._populate_devices(rescan=True)
 
     def _manual_pair(self, raw):
         """Gespeicherte manuelle Auswahl (über Namen und Schnittstelle wiedergefunden)."""
@@ -851,6 +947,12 @@ class MainWindow(QtWidgets.QMainWindow):
             if swap != self.chk_swap.isChecked():
                 self.chk_swap.setChecked(swap)
                 changed.append("Kanalzuordnung")
+        asg = wiz.assignment
+        if asg is not None and asg.confident and not asg.single_channel and not self.state.is_simulator:
+            key = self.cb_device.currentData(KEY_ROLE)
+            if key and key not in ("sim", "manual") and key not in set(self._json_list("dats_keys") or []):
+                self.mark_as_dats(key, True)        # Messbrücke nachgewiesen → das ist das DATS
+                changed.append("Gerät als DATS gemerkt")
         est = wiz.estimate
         if est is not None and est.r_ref:
             self.r_nom.setValue(round(est.r_ref, 2))

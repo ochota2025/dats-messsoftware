@@ -1,5 +1,17 @@
 # Neuerungen
 
+## 0.2.4 – 08.11.2026
+
+- **Ein- und Ausstecken wird bemerkt:** Wird ein Audiogerät angeschlossen oder getrennt, liest das
+  Programm die Geräteliste von selbst neu ein. Vorher erschien ein bei laufendem Programm
+  eingestecktes DATS erst nach einem Neustart; auch der ↻-Knopf liest die Liste jetzt wirklich neu.
+- **Neues Gerät – ist das das DATS?** Ein frisch eingestecktes DATS wird automatisch gewählt.
+  Meldet sich ein neues Gerät mit zwei Eingängen unter einem anderen Namen, fragt das Programm
+  nach. Nach „Ja“ merkt es sich das Gerät, zeigt es mit ★ und wählt es künftig automatisch.
+  Von Hand: *Messung → Gewähltes Gerät als DATS merken / vergessen*.
+- Der **Geräte-Check** merkt sich ein Gerät als DATS, sobald er die Messbrücke nachgewiesen hat.
+- Wird das gewählte Gerät getrennt, sagt das Programm Bescheid und wechselt zum Simulator.
+
 ## 0.2.3 – 08.11.2026
 
 - **Eingang und Ausgang einzeln wählen** (⚙ neben der Geräteauswahl oder *Messung → Audio-Geräte
