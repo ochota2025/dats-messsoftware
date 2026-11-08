@@ -94,7 +94,8 @@ Ohne angeschlossenes DATS läuft ein eingebauter Simulator mit einem virtuellen 
   neueste Messung (grau).
 - Die Plätze werden im Projekt (*Datei → Projekt speichern*) mitgespeichert.
 - **Ansicht → Darstellung …**: hell/dunkel, Diagrammhintergrund (dunkel … grau … weiß oder eigene Farbe),
-  Bedienung mit Maus oder Touch (große Schaltflächen), Kurvenfarben, Linienstärke, Gitterlinien.
+  Bedienung mit Maus oder Touch (große Schaltflächen), Größe und Dicke der Achsenbeschriftung,
+  Kurvenfarben, Linienstärke, Gitterlinien.
 - **Ansicht → Große Schaltflächen (Touch)**: schaltet die Touch-Bedienung schnell ein und aus.
 - **Frequenzbereich der Diagramme:** Start mit 20 Hz – 20 kHz. Zoomen und Verschieben mit Maus oder
   Finger, *Rechtsklick → Frequenzbereich* oder *Bereich festlegen …*. Der Bereich und „|Z| log“

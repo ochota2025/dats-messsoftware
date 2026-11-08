@@ -1,5 +1,13 @@
 # Neuerungen
 
+## 0.2.15 – 08.11.2026
+
+- **Achsenbeschriftung einstellbar:** Unter *Ansicht → Darstellung … → Achsenbeschriftung* lassen
+  sich Größe (6–24 pt oder „Standard“) und „fett“ für die Zahlen und Achsentitel neben den
+  Diagrammen einstellen. Das gilt für alle Diagramme. Die Achse wird automatisch breiter, damit
+  nichts abgeschnitten wird. Bei großer Schrift blendet das Diagramm Zwischenwerte (z. B. 20, 50)
+  aus, damit sich nichts überlappt. Die Legende im Diagramm bleibt klein.
+
 ## 0.2.14 – 08.11.2026
 
 - **Diagramme starten mit 20 Hz – 20 kHz** statt mit 1 Hz – 20 kHz.

@@ -74,6 +74,17 @@ class Appearance:
     grid: float = 0.25          # Deckkraft der Gitterlinien 0 … 1
     plot_bg_custom: str = ""    # eigener Diagrammhintergrund (#rrggbb), leer = wie Farbschema
     touch: str = "auto"         # Bedienung: auto | mouse | touch
+    axis_font_pt: float = 0     # Achsenbeschriftung und Zahlen in pt, 0 = Systemschrift
+    axis_bold: bool = False
+
+    def axis_font(self) -> QtGui.QFont:
+        """Schrift für Achsenzahlen und Achsentitel der Diagramme (die Legende bleibt klein)."""
+        app = QtWidgets.QApplication.instance()
+        font = QtGui.QFont(app.font()) if app is not None else QtGui.QFont()
+        if self.axis_font_pt:
+            font.setPointSizeF(float(self.axis_font_pt))
+        font.setBold(bool(self.axis_bold))
+        return font
 
     @property
     def dark(self) -> bool:
@@ -432,10 +443,17 @@ class AppearanceManager(QtCore.QObject):
 
     def style_plot(self, plot_item: pg.PlotItem) -> None:
         a = self.current
+        font = a.axis_font()
+        size = f"{font.pointSizeF():g}pt"
+        weight = "bold" if a.axis_bold else "normal"
         for name in ("left", "bottom", "right", "top"):
             ax = plot_item.getAxis(name)
             ax.setPen(pg.mkPen(a.plot_fg))
             ax.setTextPen(pg.mkPen(a.plot_fg))
+            ax.setTickFont(font)
+            ax.labelStyle.update({"font-size": size, "font-weight": weight})
+            ax._updateLabel()
+            ax.textWidth = ax.textHeight = 0        # Platz für die Zahlen neu bemessen (auch kleiner)
         plot_item.showGrid(x=True, y=True, alpha=a.grid)
         if plot_item.legend is not None:
             plot_item.legend.setLabelTextColor(a.plot_fg)
@@ -527,6 +545,24 @@ class AppearanceDialog(QtWidgets.QDialog):
         self.touch.setCurrentIndex(max(self.touch.findData(a.touch), 0))
         self.touch.currentIndexChanged.connect(self._preview)
 
+        axis = QtWidgets.QWidget()
+        al = QtWidgets.QHBoxLayout(axis)
+        al.setContentsMargins(0, 0, 0, 0)
+        self.axis_size = QtWidgets.QDoubleSpinBox()
+        self.axis_size.setRange(5.0, 24.0)
+        self.axis_size.setSingleStep(1.0)
+        self.axis_size.setDecimals(0)
+        self.axis_size.setSuffix(" pt")
+        self.axis_size.setSpecialValueText("Standard")    # 5 = Systemschrift
+        self.axis_size.setValue(a.axis_font_pt or 5.0)
+        self.axis_size.setToolTip("Größe der Zahlen und Achsentitel neben den Diagrammen")
+        self.axis_bold = QtWidgets.QCheckBox("fett")
+        self.axis_bold.setChecked(a.axis_bold)
+        al.addWidget(self.axis_size, 1)
+        al.addWidget(self.axis_bold)
+        self.axis_size.valueChanged.connect(self._preview)
+        self.axis_bold.toggled.connect(self._preview)
+
         self.width = QtWidgets.QDoubleSpinBox()
         self.width.setRange(0.5, 6.0)
         self.width.setSingleStep(0.5)
@@ -546,12 +582,14 @@ class AppearanceDialog(QtWidgets.QDialog):
         form.addRow("Farbschema:", self.theme)
         form.addRow("Diagrammhintergrund:", bg)
         form.addRow("Bedienung:", self.touch)
+        form.addRow("Achsenbeschriftung:", axis)
         form.addRow("Linienstärke:", self.width)
         form.addRow("Gitterlinien:", self.grid)
         form.addRow("Kurvenfarben:", self.palette)
         form.addRow(self.recolor)
         hint = QtWidgets.QLabel("Einzelne Kurven lassen sich zusätzlich im Tab „Impedanz“ über "
-                                "„Farbe …“ umfärben. Hintergrund und Bedienung wirken sofort; "
+                                "„Farbe …“ umfärben. Hintergrund, Bedienung und Achsenbeschriftung "
+                                "wirken sofort; "
                                 "„Abbrechen“ stellt den vorherigen Zustand wieder her.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: palette(placeholder-text);")
@@ -616,15 +654,21 @@ class AppearanceDialog(QtWidgets.QDialog):
         self._preview()
 
     # ------------------------------------------------------------------------
+    def _axis_pt(self) -> float:
+        v = self.axis_size.value()
+        return 0.0 if v <= self.axis_size.minimum() else float(v)
+
     def value(self) -> Appearance:
         return Appearance(theme=self.theme.currentData(), line_width=self.width.value(),
                           palette=self.palette.currentData(), grid=self.grid.value() / 100,
-                          plot_bg_custom=self._bg_custom, touch=self.touch.currentData())
+                          plot_bg_custom=self._bg_custom, touch=self.touch.currentData(),
+                          axis_font_pt=self._axis_pt(), axis_bold=self.axis_bold.isChecked())
 
     def _preview(self):
-        """Sofort-Vorschau: nur Hintergrund und Bedienung, der Rest wartet auf OK/Übernehmen."""
+        """Sofort-Vorschau: Hintergrund, Bedienung, Achsenschrift – der Rest wartet auf OK/Übernehmen."""
         cur = appearance().current
-        appearance().set(replace(cur, plot_bg_custom=self._bg_custom, touch=self.touch.currentData()))
+        appearance().set(replace(cur, plot_bg_custom=self._bg_custom, touch=self.touch.currentData(),
+                                 axis_font_pt=self._axis_pt(), axis_bold=self.axis_bold.isChecked()))
         self._update_swatch()
         self.adjustSize()
 

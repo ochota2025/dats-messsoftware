@@ -559,3 +559,28 @@ def test_plot_remembers_frequency_range_and_log():
     assert freq(ImpedancePlot(name="t"))[0] < 1.5            # „Alles anzeigen“ wird ebenfalls gemerkt
     assert ImpedancePlot().log_y is False                    # ohne Namen: nichts geladen
     QtCore.QSettings().clear()
+
+
+def test_axis_font_size_and_weight():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6 import QtWidgets
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from datsmess.gui.appearance import Appearance, appearance
+    from datsmess.gui.plots import ImpedancePlot
+    assert Appearance().axis_font().pointSizeF() == app.font().pointSizeF()      # Standard = Systemschrift
+    f = Appearance(axis_font_pt=16, axis_bold=True).axis_font()
+    assert f.pointSizeF() == 16 and f.bold()
+    old = appearance().current
+    try:
+        p = ImpedancePlot()
+        w_small = p.top.getAxis("left").fixedWidth
+        appearance().current = Appearance(axis_font_pt=18, axis_bold=True)
+        p._restyle()
+        ax = p.top.getAxis("left")
+        assert ax.style["tickFont"].pointSizeF() == 18
+        assert ax.labelStyle["font-size"] == "18pt" and ax.labelStyle["font-weight"] == "bold"
+        assert ax.fixedWidth > w_small                          # Platz für größere Zahlen
+        assert p.bottom.getAxis("left").fixedWidth == ax.fixedWidth   # beide Diagramme bündig
+    finally:
+        appearance().current = old

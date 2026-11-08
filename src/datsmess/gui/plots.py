@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from .appearance import appearance
 
@@ -171,8 +171,6 @@ class ImpedancePlot(QtWidgets.QWidget):
             p.setMenuEnabled(False)     # eigenes Menü mit echten Werten statt interner Log-Werte
             p.hideButtons()
         self.bottom.setXLink(self.top)
-        for pi in (self.top, self.bottom):         # gleiche Achsenbreite: beide Diagramme exakt bündig
-            pi.getAxis("left").setWidth(62)
         self.bottom.setLabel("bottom", "Frequenz [Hz]")
         self.legend = self.top.addLegend(offset=(-10, 10))
 
@@ -242,6 +240,11 @@ class ImpedancePlot(QtWidgets.QWidget):
         self.glw.setBackground(a.plot_bg)
         for p in (self.top, self.bottom):
             appearance().style_plot(p)
+        # gleiche, feste Achsenbreite: beide Diagramme exakt bündig – passend zur Schriftgröße
+        fm = QtGui.QFontMetrics(a.axis_font())
+        w = max(62, fm.horizontalAdvance("-150.0") + fm.height() + 18)
+        for p in (self.top, self.bottom):
+            p.getAxis("left").setWidth(w)
         pen = pg.mkPen(a.model2, width=1, style=QtCore.Qt.DashLine)
         self.vline_top.setPen(pen)
         self.vline_bottom.setPen(pen)

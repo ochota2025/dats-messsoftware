@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "datsmess"
-version = "0.2.14"
+version = "0.2.15"
 description = "Plattformübergreifende Impedanz-, T/S- und LCR-Messsoftware für das Dayton Audio DATS V3 Mess-Interface"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -29,7 +29,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 95 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 96 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -91,7 +91,7 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Installation ist editierbar (`pip install -e .`); das Flag `.venv/datsmess-editable.flag`
   steuert die einmalige Neu-Einbindung nach einem Update.
 
-## Stand und offene Punkte (08.11.2026, Version 0.2.14)
+## Stand und offene Punkte (08.11.2026, Version 0.2.15)
 
 **Läuft:** beim Tester unter Windows mit dem Simulator; Design im Stil des Icons (hell/dunkel),
 Kennwert-Kacheln, ausblendbare Seitenleiste, Qualitäts-Ampel, Geräte-Check, Pegelreihe, Vergleich,
