@@ -383,3 +383,10 @@ def test_ts_recommendation_values():
     fit2 = fit_driver(f, d.impedance(f, added_mass=0.005), re_dc=fit1.Re, fix_re=True)
     p = derive_ts(fit1, VasMethod.ADDED_MASS, sd=d.Sd, second=fit2, added_mass=0.005)
     assert "17 g" in p.recommendation                # Mms 22 g · (1/0,75² − 1) ≈ 17 g
+
+
+def test_latest_commit_rejects_non_github():
+    from datsmess import updates
+    assert updates.latest_commit("https://example.org/x/y") is None
+    assert updates.raw_url("https://github.com/a/b", "f.py", "0123abc") == \
+        "https://raw.githubusercontent.com/a/b/0123abc/f.py"

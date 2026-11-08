@@ -10,6 +10,8 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 - **Committen und pushen ohne Rückfrage erlaubt** (Freigabe vom 08.11.2026) – aber nur fertige,
   geprüfte Stände (Tests grün, GUI durchgespielt), der Tester holt direkt von `main`.
   Commit-Nachrichten auf Deutsch: Überschrift + Stichpunkte, Abschluss `Co-Authored-By: Claude …`.
+- Update-Prüfung: `updates.fetch_remote` holt erst den Commit-SHA über die GitHub-API (≤ 60 s alt),
+  dann die Rohdatei an diesem SHA – raw.githubusercontent.com cached `main` sonst bis zu 5 Minuten.
 - **Bei jeder Veröffentlichung `__version__` erhöhen** (`src/datsmess/__init__.py` und
   `pyproject.toml`) und einen Abschnitt in `NEUERUNGEN.md` ergänzen – darauf beruhen der
   Update-Hinweis in der App und „Was ist neu?“.
@@ -25,7 +27,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 85 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 86 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:

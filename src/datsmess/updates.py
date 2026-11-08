@@ -60,9 +60,30 @@ class RemoteInfo:
     changes: str            # Abschnitte aus NEUERUNGEN.md, die neuer als die installierte Version sind
 
 
+def latest_commit(repo: str, timeout: float = 6.0) -> str | None:
+    """SHA des neuesten Stands von ``main`` über die GitHub-API (höchstens ~60 s alt).
+
+    Die Rohdateien unter raw.githubusercontent.com werden bis zu 5 Minuten zwischengespeichert –
+    direkt nach einer Veröffentlichung meldete die App sonst noch die alte Version. Über den Stand
+    (Commit) adressiert, ist die Rohdatei eindeutig und nie veraltet."""
+    m = re.match(r"https?://github\.com/([^/]+)/([^/]+)", repo)
+    if not m:
+        return None
+    req = urllib.request.Request(f"https://api.github.com/repos/{m.group(1)}/{m.group(2)}/commits/main",
+                                 headers={"User-Agent": f"datsmess/{__version__}",
+                                          "Accept": "application/vnd.github.sha"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:      # noqa: S310 – feste https-Adresse
+            sha = r.read(100).decode("ascii", errors="replace").strip()
+        return sha if re.fullmatch(r"[0-9a-f]{40}", sha) else None
+    except Exception:       # noqa: BLE001 – z. B. API-Limit: dann über den Zweig (evtl. kurz veraltet)
+        return None
+
+
 def fetch_remote(repo: str | None = None, timeout: float = 6.0) -> RemoteInfo:
     repo = repo or repo_url()
-    url = raw_url(repo, "src/datsmess/__init__.py")
+    ref = latest_commit(repo, timeout) or "main"
+    url = raw_url(repo, "src/datsmess/__init__.py", ref)
     if url is None:
         raise ValueError(f"Keine GitHub-Adresse: {repo}")
     m = re.search(r'__version__\s*=\s*["\']([^"\']+)', _get(url, timeout))
@@ -70,7 +91,7 @@ def fetch_remote(repo: str | None = None, timeout: float = 6.0) -> RemoteInfo:
         raise ValueError("Versionsnummer auf GitHub nicht gefunden.")
     changes = ""
     try:
-        changes = sections_newer_than(_get(raw_url(repo, CHANGELOG), timeout), __version__)
+        changes = sections_newer_than(_get(raw_url(repo, CHANGELOG, ref), timeout), __version__)
     except Exception:       # noqa: BLE001 – Änderungsliste ist optional
         pass
     return RemoteInfo(m.group(1), changes)

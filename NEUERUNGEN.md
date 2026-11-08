@@ -1,5 +1,12 @@
 # Neuerungen
 
+## 0.2.8 – 08.11.2026
+
+- **Behoben:** „Nach Updates suchen“ meldete direkt nach einer Veröffentlichung bis zu 5 Minuten
+  lang noch die alte Version, weil GitHub die Datei zwischenspeichert. Jetzt fragt das Programm
+  zuerst nach dem neuesten Stand und liest die Versionsnummer genau dieses Stands. Eine neue
+  Version wird so spätestens nach etwa einer Minute erkannt.
+
 ## 0.2.7 – 08.11.2026
 
 - **Mindestverschiebung bei der Vas-Bestimmung:** Zusatzmasse bzw. Testgehäuse müssen fs
