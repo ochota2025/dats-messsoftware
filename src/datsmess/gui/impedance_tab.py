@@ -9,7 +9,7 @@ import json
 
 from ..io.formats import FORMATS, TextExportOptions, export_impedance, import_impedance
 from ..measurement import Measurement, reprocess
-from .de import get_item, get_text
+from .de import germanize, get_item, get_text
 from .params_panel import QuickParams
 from .slots import SlotBar
 from .dialogs import ExportDialog
@@ -98,6 +98,10 @@ class ImpedanceTab(QtWidgets.QWidget):
         self.log_y.toggled.connect(self.plot.set_log_y)
         btn_fit.clicked.connect(lambda: (self.plot.top.enableAutoRange(), self.plot.bottom.enableAutoRange()))
         self.list.itemChanged.connect(self._item_changed)
+        self.list.itemDoubleClicked.connect(lambda it: self._rename(it.data(QtCore.Qt.UserRole)))
+        self.btn_rename.setToolTip("Markierte Messung umbenennen (ohne Markierung: neueste). "
+                                   "Alternativ Doppelklick auf die Messung.")
+        self.btn_color.setToolTip("Farbe der markierten Messungen ändern (ohne Markierung: neueste)")
         self.btn_import.clicked.connect(self.import_files)
         self.btn_export.clicked.connect(self.export_selected)
         self.btn_rename.clicked.connect(self._rename)
@@ -146,29 +150,43 @@ class ImpedanceTab(QtWidgets.QWidget):
     def _selected(self) -> list[Measurement]:
         return [it.data(QtCore.Qt.UserRole) for it in self.list.selectedItems()]
 
-    def _rename(self):
+    def _need_selection(self, action: str) -> list[Measurement]:
         sel = self._selected()
-        if len(sel) != 1:
+        if not sel:
+            QtWidgets.QMessageBox.information(
+                self, action, "Bitte zuerst rechts in der Liste eine oder mehrere Messungen anklicken "
+                              "(Strg/⌘ bzw. Umschalt für Mehrfachauswahl).")
+        return sel
+
+    def _rename(self, m: Measurement | None = None):
+        m = m or self.current_measurement()          # markierte, sonst neueste Messung
+        if m is None:
             return
-        name, ok = get_text(self, "Umbenennen", "Neuer Name:", sel[0].name)
-        if ok and name:
-            sel[0].name = name
+        name, ok = get_text(self, "Umbenennen", "Neuer Name:", m.name)
+        if ok and name.strip():
+            m.name = name.strip()
             self.state.measurementsChanged.emit()
 
     def _color(self):
-        sel = self._selected()
+        sel = self._selected() or ([self.current_measurement()] if self.current_measurement() else [])
         if not sel:
             return
-        c = QtWidgets.QColorDialog.getColor(QtGui.QColor(sel[0].color or "#000"), self)
-        if c.isValid():
+        dlg = QtWidgets.QColorDialog(QtGui.QColor(sel[0].color or "#1f77b4"), self)
+        dlg.setWindowTitle(f"Kurvenfarbe – {sel[0].name}" if len(sel) == 1 else "Kurvenfarbe")
+        bb = dlg.findChild(QtWidgets.QDialogButtonBox)
+        if bb is not None:
+            germanize(bb)
+        if dlg.exec() == QtWidgets.QDialog.Accepted and dlg.selectedColor().isValid():
             for m in sel:
-                m.color = c.name()
+                m.color = dlg.selectedColor().name()
             self.state.measurementsChanged.emit()
 
     def _remove(self):
-        for m in self._selected():
+        sel = self._need_selection("Entfernen")
+        for m in sel:
             self.state.measurements.remove(m)
-        self.state.measurementsChanged.emit()
+        if sel:
+            self.state.measurementsChanged.emit()
 
     def _toggle_all(self):
         on = not all(m.visible for m in self.state.measurements)
@@ -247,7 +265,7 @@ class ImpedanceTab(QtWidgets.QWidget):
 
     # -- Rohdaten / Watch-Folder -------------------------------------------
     def _reprocess(self):
-        sel = self._selected()
+        sel = self._need_selection("Neu berechnen")
         if not sel:
             return
         cal = self.state.engine.calibration

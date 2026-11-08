@@ -57,10 +57,12 @@ class SlotBar(QtWidgets.QWidget):
                 b.setText(f"{i + 1}  {short}")
                 b.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
                 b.setMinimumWidth(b.fontMetrics().horizontalAdvance(b.text()) + 22)
+                b.setMaximumWidth(max(240, b.minimumWidth()))
             else:
                 b.setText(str(i + 1))
                 b.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
                 b.setMinimumWidth(30)
+                b.setMaximumWidth(30)
             b.blockSignals(True)
             b.setChecked(bool(m) and self.state.slot_visible[i])
             b.blockSignals(False)
