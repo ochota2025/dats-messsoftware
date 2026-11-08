@@ -122,7 +122,12 @@ def find_dats(devices: list[DeviceInfo] | None = None) -> DeviceInfo | None:
 HOSTAPI_RANK = {"Windows WASAPI": 0, "Core Audio": 0, "ALSA": 0, "JACK Audio Connection Kit": 1,
                 "Windows DirectSound": 2, "MME": 3, "Windows WDM-KS": 4}
 # Sammel-/Ersatzeinträge der Treiber, die kein echtes Gerät sind
-PSEUDO_DEVICES = ("microsoft soundmapper", "primärer sound", "primary sound", "sound mapper")
+PSEUDO_DEVICES = ("microsoftsoundmapper", "primärersound", "primarysound", "soundmapper")
+
+
+def is_pseudo(name: str) -> bool:
+    """Sammel-/Ersatzeinträge wie „Microsoft Sound Mapper - Input“ oder „Primärer Soundtreiber“."""
+    return "".join(name.lower().split()).startswith(PSEUDO_DEVICES)
 
 
 def device_key(name: str) -> str:
@@ -138,7 +143,10 @@ def physical_name(name: str) -> str:
     inner = name[i + 1:].strip()
     if inner.endswith(")") and inner.count("(") < inner.count(")"):
         inner = inner[:-1]
-    return inner.strip() or name.strip()
+    inner = inner.strip()
+    if not inner or all(ch in "0123456789abcdefABCDEF- " for ch in inner):
+        return name[:i].strip() or name.strip()     # „Babyface Pro (71994324)“: Klammer = Seriennummer
+    return inner
 
 
 @dataclass
@@ -221,7 +229,7 @@ def device_choices(devices: list[DeviceInfo], fs: int, supports=None) -> list[De
             supports = lambda i, o, rate: _supports(sd, i, o, rate)     # noqa: E731
         except Exception:   # noqa: BLE001
             supports = lambda i, o, rate: True                          # noqa: E731
-    devices = [d for d in devices if not d.name.lower().startswith(PSEUDO_DEVICES)]
+    devices = [d for d in devices if not is_pseudo(d.name)]
 
     # 1) Kandidaten je Schnittstelle: Vollduplex-Geräte und Paare (Mikrofon + Lautsprecher desselben Geräts)
     pairs: list[tuple[DeviceInfo, DeviceInfo]] = []
@@ -263,6 +271,8 @@ def device_choices(devices: list[DeviceInfo], fs: int, supports=None) -> list[De
     for d in sorted(devices, key=lambda d: HOSTAPI_RANK.get(d.hostapi, 5)):
         if d.index in paired:
             continue
+        if d.hostapi == "Windows WDM-KS":
+            continue        # dieselbe Hardware wie bei MME/WASAPI, nur unter anderem Namen – Dublette
         singles.setdefault(device_key(d.name), d)
     taken = {device_key(c.out.name) for c in out_list} | {device_key(c.inp.name) for c in out_list}
     for k, d in singles.items():

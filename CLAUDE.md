@@ -25,7 +25,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 70 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 76 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:

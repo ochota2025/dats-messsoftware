@@ -268,3 +268,41 @@ def test_device_choices_full_duplex_and_keys_stable():
     k48 = device_choices(_win_devices(), 48000, supports=lambda i, o, fs: True)[0].key
     k44 = device_choices(_win_devices(), 44100, supports=lambda i, o, fs: o.hostapi != "Windows WASAPI")[0].key
     assert k48 == k44                                                    # Auswahl bleibt beim Ratenwechsel
+
+
+def test_device_choices_real_windows_laptop():
+    """Echte Geräteliste eines Tester-Laptops (Windows 10, Realtek, ohne DATS) aus dem Fehlerbericht."""
+    from datsmess.audio.backend import DeviceInfo as D, device_choices
+    devs = [
+        D(0, "Microsoft Sound Mapper - Input", "MME", 2, 0, 44100),
+        D(1, "Mikrofonarray (Realtek(R) Audio", "MME", 2, 0, 44100),
+        D(2, "Microsoft Sound Mapper - Output", "MME", 0, 2, 44100),
+        D(3, "Lautsprecher (Realtek(R) Audio)", "MME", 0, 2, 44100),
+        D(4, "Primärer Soundaufnahmetreiber", "Windows DirectSound", 2, 0, 44100),
+        D(5, "Mikrofonarray (Realtek(R) Audio)", "Windows DirectSound", 2, 0, 44100),
+        D(6, "Primärer Soundtreiber", "Windows DirectSound", 0, 2, 44100),
+        D(7, "Lautsprecher (Realtek(R) Audio)", "Windows DirectSound", 0, 2, 44100),
+        D(8, "Lautsprecher (Realtek(R) Audio)", "Windows WASAPI", 0, 2, 48000),
+        D(9, "Mikrofonarray (Realtek(R) Audio)", "Windows WASAPI", 2, 0, 48000),
+        D(10, "Speakers (Realtek HD Audio output)", "Windows WDM-KS", 0, 2, 44100),
+        D(11, "Stereomix (Realtek HD Audio Stereo input)", "Windows WDM-KS", 2, 0, 48000),
+        D(12, "Mikrofonarray (Realtek HD Audio Mic input)", "Windows WDM-KS", 2, 0, 44100),
+    ]
+    ch = device_choices(devs, 48000, supports=lambda i, o, fs: o.hostapi == "Windows WASAPI" or fs == 44100)
+    assert [(c.name, c.hostapi, c.usable, c.dimmed) for c in ch] == [
+        ("Realtek(R) Audio", "Windows WASAPI", True, True)]
+    assert ch[0].indices == (9, 8)
+    ch44 = device_choices(devs, 44100, supports=lambda i, o, fs: o.hostapi != "Windows WASAPI")
+    assert [(c.name, c.hostapi) for c in ch44] == [("Realtek(R) Audio", "Windows DirectSound")]
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("Lautsprecher (Realtek(R) Audio)", "Realtek(R) Audio"),
+    ("Mikrofonarray (Realtek(R) Audio", "Realtek(R) Audio"),        # von MME gekürzt
+    ("Mikrofon (DATS V3)", "DATS V3"),
+    ("Babyface Pro (71994324)", "Babyface Pro"),                     # macOS: Seriennummer in Klammern
+    ("DATS V3", "DATS V3"),
+])
+def test_physical_name(name, expected):
+    from datsmess.audio.backend import physical_name
+    assert physical_name(name) == expected

@@ -1,5 +1,17 @@
 # Neuerungen
 
+## 0.2.3 – 08.11.2026
+
+- **Eingang und Ausgang einzeln wählen** (⚙ neben der Geräteauswahl oder *Messung → Audio-Geräte
+  einzeln wählen*) – wie im Original-Programm von Dayton: erst die Schnittstelle (WASAPI,
+  DirectSound, MME …), dann Aufnahme- und Wiedergabegerät. Der Dialog prüft sofort, ob der Treiber
+  die Kombination mit der eingestellten Abtastrate annimmt. Die Wahl erscheint als „✎ … (manuell)“
+  in der Geräteliste und bleibt gespeichert.
+- Geräteliste aufgeräumt: „Microsoft Sound Mapper“ und doppelte WDM-KS-Einträge (dieselbe
+  Hardware unter anderem Namen) werden nicht mehr angezeigt.
+- Automatisches Sichern nur noch nach Änderungen (vorher alle 2 Minuten, auch ohne Änderung).
+- Die Geräteliste wird beim Start nur noch einmal aufgebaut.
+
 ## 0.2.2 – 08.11.2026
 
 - **Geräteauswahl überarbeitet:** Windows meldet Soundkarten – auch das DATS – als zwei getrennte

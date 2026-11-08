@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import __version__, diagnostics, updates
-from ..audio.backend import CONNECTIONS, SoundDeviceBackend, device_choices, list_devices
+from ..audio.backend import CONNECTIONS, SoundDeviceBackend, device_choices, list_devices, physical_name
 from ..audio.simulator import SimulatorBackend
 from ..io import project as projio
 from ..io.watch import WatchFolderConfig
@@ -24,6 +24,7 @@ from .correction_tab import CorrectionTab
 from .datasheet import DatasheetDialog
 from .de import ask
 from .device_check import DeviceCheckWizard
+from .device_dialog import DeviceDialog
 from .dialogs import ProjectInfoDialog, WatchFolderDialog
 from .distortion_tab import DistortionTab
 from .generator_tab import GeneratorTab
@@ -58,6 +59,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim.level_dependent = True        # Pegelreihe zeigt sichtbare Änderungen
         self._sim.distortion = True             # Klirr-Tab hat etwas zu zeigen
         self._autosave_busy = False
+        self._autosave_rev = -1
 
         self._build_sidebar()
         self.tabs = QtWidgets.QTabWidget()
@@ -105,6 +107,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._restore_settings()
         self._populate_devices(select_saved=True)
+        self.cb_fs.currentIndexChanged.connect(lambda: self._populate_devices())   # Schnittstelle je Rate
         self.state.dirty = False
         self._update_title()
         self.state.status.emit("Bereit.")
@@ -239,6 +242,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def autosave(self):
         if self._autosave_busy or self.state.busy or not self.state.dirty or not self.state.measurements:
             return
+        if self.state.revision == self._autosave_rev and self._autosave_path().exists():
+            return                          # seit der letzten Sicherung nichts geändert
+        self._autosave_rev = self.state.revision
         project = self.state.to_project(self._project_settings())
         target = self._autosave_path()
         origin = str(self.state.project_path or "")
@@ -375,8 +381,17 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_refresh.setText("↻")
         btn_refresh.setToolTip("Geräteliste aktualisieren")
         btn_refresh.clicked.connect(lambda: self._populate_devices())
+        btn_manual = QtWidgets.QToolButton()
+        btn_manual.setText("⚙")
+        btn_manual.setToolTip("Eingang und Ausgang einzeln wählen … (wie im Original-Programm)")
+        btn_manual.clicked.connect(self.open_device_dialog)
+        for b in (btn_refresh, btn_manual):
+            b.setFixedWidth(30)
+            b.setStyleSheet("padding: 3px 0;")
+        row.setSpacing(4)
         row.addWidget(self.cb_device, 1)
         row.addWidget(btn_refresh)
+        row.addWidget(btn_manual)
         f.addRow("Gerät:", row)
         self.lbl_device_hint = QtWidgets.QLabel("Graue Einträge eignen sich nicht zum Messen – "
                                                 "Maus drüberhalten für die Erklärung.")
@@ -486,7 +501,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sidebar_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
 
         self.cb_device.currentIndexChanged.connect(self._device_changed)
-        self.cb_fs.currentIndexChanged.connect(lambda: self._populate_devices())   # Schnittstelle je Rate
         for wdg in (self.cb_fs, self.cb_len, self.cb_mode):
             wdg.currentIndexChanged.connect(self._sweep_changed)
         self.level.valueChanged.connect(self._sweep_changed)
@@ -537,6 +551,7 @@ class MainWindow(QtWidgets.QMainWindow):
             a.setShortcut(QtGui.QKeySequence(f"Alt+{i + 1}"))
         m_meas.addAction("Alle Speicherplätze leeren", self._clear_slots)
         m_meas.addSeparator()
+        m_meas.addAction("Audio-Geräte einzeln wählen …", self.open_device_dialog)
         m_meas.addAction("Geräte-Check …", self.open_device_check)
         m_meas.addAction("Kalibrier-Assistent …", self.open_calibration)
         m_meas.addAction("Kalibrierung verwerfen", lambda: self.state.set_calibration(None))
@@ -671,7 +686,8 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             saved = self.cb_device.currentData(KEY_ROLE) or ""
         fs = self.cb_fs.currentData() or 48000
-        choices = device_choices(list_devices(), fs)
+        raw = list_devices()
+        choices = device_choices(raw, fs)
         a = appearance().current
         self.cb_device.blockSignals(True)
         self.cb_device.clear()
@@ -697,16 +713,55 @@ class MainWindow(QtWidgets.QMainWindow):
             elif c.dimmed:
                 self.cb_device.setItemData(i, QtGui.QColor(a.muted), QtCore.Qt.ForegroundRole)
                 n_grey += 1
+        manual = self._manual_pair(raw)
+        if manual is not None:
+            inp, out = manual
+            pi, po = physical_name(inp.name), physical_name(out.name)
+            title = po if pi == po else f"{pi} → {po}"
+            self.cb_device.insertItem(1, f"✎ {title} ({out.hostapi}, manuell)", (inp.index, out.index))
+            self.cb_device.setItemData(1, "manual", KEY_ROLE)
+            self.cb_device.setItemData(1, title, NAME_ROLE)
+            self.cb_device.setItemData(1, f"Von Hand gewählt (Messung → Audio-Geräte einzeln wählen):\n"
+                                          f"Eingang: {inp.name}\nAusgang: {out.name}\nSchnittstelle: {out.hostapi}",
+                                       QtCore.Qt.ToolTipRole)
         self.lbl_device_hint.setVisible(n_grey > 0)
         idx = self.cb_device.findData(saved, KEY_ROLE) if saved else -1
         if idx < 0 or not model.item(idx).isEnabled():
-            dats = next((i for i, c in enumerate(choices, start=1) if c.usable and c.is_dats), None)
+            dats = next((i for i in range(self.cb_device.count())
+                         if self.cb_device.itemText(i).startswith("★")), None)
             idx = dats if dats is not None else 0
         self.cb_device.setCurrentIndex(idx)
         self.cb_device.blockSignals(False)
         log.info("Geräteliste (%g kHz): %s", fs / 1000,
                  "; ".join(f"{c.label}{'' if c.usable else ' [grau]'}" for c in choices) or "keine")
         self._device_changed()
+
+    def _manual_pair(self, raw):
+        """Gespeicherte manuelle Auswahl (über Namen und Schnittstelle wiedergefunden)."""
+        try:
+            m = json.loads(self.settings.value("manual_device", "") or "null")
+        except (ValueError, TypeError):
+            return None
+        if not m:
+            return None
+        inp = next((d for d in raw if d.hostapi == m.get("api") and d.name == m.get("in") and d.max_in >= 1), None)
+        out = next((d for d in raw if d.hostapi == m.get("api") and d.name == m.get("out") and d.max_out >= 1), None)
+        return (inp, out) if inp is not None and out is not None else None
+
+    def open_device_dialog(self):
+        if self.state.busy:
+            return
+        cur = self.cb_device.currentData()
+        dlg = DeviceDialog(list_devices(), self.cb_fs.currentData() or 48000, cur, self)
+        if dlg.exec() != QtWidgets.QDialog.Accepted or dlg.selection() is None:
+            return
+        inp, out = dlg.selection()
+        self.settings.setValue("manual_device", json.dumps({"api": out.hostapi, "in": inp.name, "out": out.name}))
+        self.settings.setValue("device_key", "manual")
+        log.info("Manuelle Geräteauswahl: Eingang %s, Ausgang %s (%s)", inp.name, out.name, out.hostapi)
+        self._populate_devices(select_saved=True)
+        if inp.max_in < 2 and self.cb_mode.currentData() != "single_channel":
+            self.state.status.emit("Hinweis: Der gewählte Eingang hat nur einen Kanal – Messprinzip „1 Kanal“ wählen.")
 
     def _device_changed(self):
         idx = self.cb_device.currentData()

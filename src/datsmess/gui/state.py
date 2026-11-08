@@ -69,6 +69,7 @@ class AppState(QtCore.QObject):
         self.project_path: Path | None = None
         self.project_created = ""
         self.dirty = False
+        self.revision = 0
         self.ts_state: dict | None = None
         self.known_calibrations: dict[str, Calibration] = {}
         self.watch = WatchFolderConfig()
@@ -140,6 +141,7 @@ class AppState(QtCore.QObject):
     # -- Projekt -------------------------------------------------------------
     def mark_dirty(self, *_):
         self.dirty = True
+        self.revision += 1                  # für das automatische Sichern: nur nach echten Änderungen
         self.projectChanged.emit()
 
     @property
