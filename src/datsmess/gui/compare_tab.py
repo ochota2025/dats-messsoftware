@@ -7,7 +7,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from ..analysis import matching
 from ..analysis.ts import quick_parameters
 from .appearance import appearance
-from .plots import LogAxis
+from .plots import LogAxis, plot_card
 from .state import AppState
 from .ts_tab import MeasurementCombo
 
@@ -71,7 +71,7 @@ class CompareTab(QtWidgets.QWidget):
         self.legend = self.plot.addLegend(offset=(-10, 10))
         right = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         right.addWidget(self.table)
-        right.addWidget(self.plot)
+        right.addWidget(plot_card(self.plot))
         right.setSizes([260, 480])
 
         split = QtWidgets.QSplitter()

@@ -1,5 +1,14 @@
 # Neuerungen
 
+## 0.2.1 – 08.11.2026
+
+- **Behoben:** Im Simulator war die Impedanzkurve unterhalb von etwa 10 Hz unruhig. Ursache war
+  der neue simulierte Klirr; echte Messungen waren nicht betroffen.
+- Neue Messungen ohne Speicherplatz bekommen kräftige Farben statt Grau und Oliv.
+- Diagramme als Karten mit runden Ecken, passend zum übrigen Design.
+- Die Kennwerte-Tabelle füllt die Breite aus.
+- Nach dem Update von 0.1 erscheint „Was ist neu?“ statt „Erste Schritte“.
+
 ## 0.2.0 – 08.11.2026
 
 **Neues Aussehen**

@@ -53,6 +53,17 @@ class Curve:
     dashed: bool = False
 
 
+def plot_card(widget: QtWidgets.QWidget, margins=(10, 10, 10, 6)) -> QtWidgets.QWidget:
+    """Diagramm in eine Karte mit runden Ecken setzen (Rahmen/Hintergrund aus dem Stylesheet)."""
+    card = QtWidgets.QWidget()
+    card.setObjectName("plotCard")
+    card.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+    lay = QtWidgets.QVBoxLayout(card)
+    lay.setContentsMargins(*margins)
+    lay.addWidget(widget)
+    return card
+
+
 def display_data(m, smoothing) -> tuple[np.ndarray, np.ndarray]:
     if smoothing == "raw":
         return m.f, m.Z
@@ -162,8 +173,10 @@ class ImpedancePlot(QtWidgets.QWidget):
         self.readout = QtWidgets.QLabel(" ")
         self.readout.setStyleSheet("color: palette(window-text); font-family: monospace;")
 
+        self.setObjectName("plotCard")
+        self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
         lay = QtWidgets.QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setContentsMargins(10, 10, 10, 4)
         lay.addWidget(self.glw, 1)
         lay.addWidget(self.readout)
         self.glw.scene().sigMouseMoved.connect(self._mouse_moved)

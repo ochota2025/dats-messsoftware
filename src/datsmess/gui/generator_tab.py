@@ -12,7 +12,7 @@ from PySide6 import QtCore, QtWidgets
 
 from ..dsp.generator import WAVEFORMS, generate
 from .appearance import appearance
-from .plots import LogAxis
+from .plots import LogAxis, plot_card
 from .state import AppState
 
 TIMEBASES = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]      # ms/Teilung (10 Teilungen)
@@ -129,7 +129,7 @@ class GeneratorTab(QtWidgets.QWidget):
         self.preview.setMenuEnabled(False)
         self.preview.setLabel("bottom", "Zeit [ms]")
         self.preview.setLabel("left", "Ausgang [FS]")
-        self.preview.setMaximumHeight(200)
+        self.preview.setMaximumHeight(190)
         self.scope = pg.PlotWidget()
         self.scope.setMenuEnabled(False)
         self.scope_legend = self.scope.addLegend(offset=(-10, 10))
@@ -147,8 +147,8 @@ class GeneratorTab(QtWidgets.QWidget):
         self.stack.addWidget(self.scope)
         self.stack.addWidget(self.spec)
         right = QtWidgets.QVBoxLayout()
-        right.addWidget(self.preview)
-        right.addWidget(self.stack, 1)
+        right.addWidget(plot_card(self.preview))
+        right.addWidget(plot_card(self.stack), 1)
 
         lay = QtWidgets.QHBoxLayout(self)
         lay.addWidget(left)

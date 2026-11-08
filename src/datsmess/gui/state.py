@@ -95,10 +95,9 @@ class AppState(QtCore.QObject):
         return cols[i % len(cols)]
 
     def free_color(self, i: int) -> str:
-        """Farben für nicht abgelegte Messungen: die Palettenfarben hinter den 8 Platzfarben."""
-        cols = appearance().current.colors
-        rest = cols[N_SLOTS:] or cols
-        return rest[i % len(rest)]
+        """Farben für nicht abgelegte Messungen – kräftig, aber anders als die 8 Platzfarben."""
+        cols = appearance().current.free_colors
+        return cols[i % len(cols)]
 
     def _prune_slots(self):
         ids = {m.id for m in self.measurements}

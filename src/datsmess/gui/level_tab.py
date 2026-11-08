@@ -9,7 +9,7 @@ from ..analysis.quality import grade
 from ..analysis.ts import quick_parameters
 from ..measurement import MeasurementEngine
 from .appearance import appearance
-from .plots import Curve, ImpedancePlot
+from .plots import Curve, ImpedancePlot, plot_card
 from .state import AppState
 
 COLS = [("Pegel", "dBFS", "{:+.0f}"), ("fs", "Hz", "{:.2f}"), ("Re", "Ω", "{:.3f}"), ("Qms", "", "{:.3f}"),
@@ -103,7 +103,7 @@ class LevelTab(QtWidgets.QWidget):
         self.trend_legend = self.trend.addLegend(offset=(10, 10))
         right = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         right.addWidget(self.imp)
-        right.addWidget(self.trend)
+        right.addWidget(plot_card(self.trend))
         right.setSizes([480, 300])
 
         split = QtWidgets.QSplitter()

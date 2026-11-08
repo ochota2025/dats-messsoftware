@@ -123,6 +123,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._autosave_path().exists():
             self._offer_restore()
         last = self.settings.value("last_version", "")
+        if not last and self.settings.contains("geometry"):
+            last = "0.1.0"          # Version 0.1 hat sich die Versionsnummer noch nicht gemerkt
         if not last:
             helpdlg.show_guide(self)
         elif last != __version__ and updates.is_newer(__version__, str(last)):

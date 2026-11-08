@@ -207,7 +207,12 @@ class SimulatorBackend(AudioBackend):
                 pulses = np.zeros(n)
                 pulses[hits] = 0.02 * np.sign(emf[hits])
                 out = out + np.convolve(pulses, burst)[:n]
-        return out
+        # Der quadratische Anteil enthält einen langsam schwankenden Gleichanteil (Hüllkurve²). Ein
+        # echtes Interface ist wechselspannungsgekoppelt; ungefiltert erschiene er als Unruhe der
+        # Impedanzkurve unterhalb von ~10 Hz. Deshalb Hochpass 4. Ordnung bei 15 Hz.
+        jw = 1j * 2 * np.pi * f
+        hp = (jw / (jw + 2 * np.pi * 15.0)) ** 4
+        return np.fft.irfft(np.fft.rfft(out, nfft) * hp, nfft)[:n]
 
     def _finish(self, rec: np.ndarray) -> np.ndarray:
         noise = 10 ** (self.hw.noise_dbfs / 20)

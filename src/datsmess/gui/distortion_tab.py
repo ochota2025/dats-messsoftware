@@ -9,7 +9,7 @@ from ..dsp.distortion import analyze, rub_buzz_verdict
 from ..dsp.sweep import SweepConfig
 from ..measurement import ChannelConfig
 from .appearance import appearance
-from .plots import LogAxis
+from .plots import LogAxis, plot_card
 from .state import AppState
 from .ts_tab import MeasurementCombo
 
@@ -77,7 +77,7 @@ class DistortionTab(QtWidgets.QWidget):
         self.legend = self.plot.addLegend(offset=(-10, 10))
         split = QtWidgets.QSplitter()
         split.addWidget(left)
-        split.addWidget(self.plot)
+        split.addWidget(plot_card(self.plot))
         split.setStretchFactor(1, 1)
         QtWidgets.QHBoxLayout(self).addWidget(split)
 

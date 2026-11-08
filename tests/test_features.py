@@ -203,3 +203,16 @@ def test_version_compare_and_changelog():
     assert "0.3.0" in updates.sections_newer_than(md, "0.2.0")
     assert updates.raw_url("https://github.com/a/b", "x.py") == "https://raw.githubusercontent.com/a/b/main/x.py"
     assert updates.local_changelog().strip(), "NEUERUNGEN.md fehlt"
+
+
+def test_simulator_distortion_keeps_low_end_clean():
+    """Regression 0.2.0: Der Simulator-Klirr machte die Kurve unter 10 Hz unruhig."""
+    curves = []
+    for dist in (False, True):
+        sim = SimulatorBackend(seed=1)
+        sim.distortion = dist
+        m, _ = MeasurementEngine(sim).measure_impedance()
+        curves.append(m.resampled(2000, 48))
+    (f, z0), (_, z1) = curves
+    sel = (f >= 1) & (f < 10)
+    assert np.max(np.abs(z1[sel] / z0[sel] - 1)) < 0.005

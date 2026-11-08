@@ -71,6 +71,13 @@ class Appearance:
     def err(self) -> str:
         return "#ff6b6b" if self.dark else "#c00000"
 
+    @property
+    def free_colors(self) -> list[str]:
+        """Kräftige Farben für Messungen ohne Speicherplatz – andere Farbtöne als die 8 Platzfarben."""
+        if self.dark:
+            return ["#748ffc", "#fcc419", "#20c997", "#f06595", "#94d82d", "#66d9e8"]
+        return ["#4263eb", "#e0a800", "#0b9e8f", "#c2255c", "#5c940d", "#0c8599"]
+
     # Oberflächen-Design (abgestimmt auf das Programmsymbol)
     @property
     def accent(self) -> str:
@@ -300,6 +307,7 @@ QSlider::groove:horizontal {{ height: 4px; background: {a.border}; border-radius
 QSlider::handle:horizontal {{ width: 14px; height: 14px; margin: -6px 0; border-radius: 7px; background: {a.accent}; }}
 QSlider::sub-page:horizontal {{ background: {a.accent}; border-radius: 2px; }}
 QWizard QFrame {{ background: transparent; }}
+QWidget#plotCard {{ background: {a.plot_bg}; border: 1px solid {a.border}; border-radius: 12px; }}
 """
 
 

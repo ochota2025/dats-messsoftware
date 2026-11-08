@@ -105,6 +105,9 @@ class QuickParams(QtWidgets.QGroupBox):
                     f.setBold(True)
                     it.setFont(f)
                 self.table.setItem(r, c, it)
+        hh = self.table.horizontalHeader()
+        fits = len(visible) * 64 <= max(self.table.viewport().width(), 200)
+        hh.setSectionResizeMode(QtWidgets.QHeaderView.Stretch if fits else QtWidgets.QHeaderView.Interactive)
         if not visible:
             self.hint.setText("Nach einer Treibermessung erscheinen hier fs, Re und die Gütefaktoren.")
         elif any_driver:
