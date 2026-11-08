@@ -5,7 +5,7 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
-from ..dsp.distortion import analyze, rub_buzz_verdict
+from ..dsp.distortion import analyze, at_noise_floor, rub_buzz_verdict
 from ..dsp.sweep import SweepConfig
 from ..measurement import ChannelConfig
 from .appearance import appearance
@@ -61,9 +61,13 @@ class DistortionTab(QtWidgets.QWidget):
         ll.addWidget(gv)
         hint = QtWidgets.QLabel(
             "Ausgewertet wird die <b>Spannung an den Klemmen</b> während des Impedanz-Sweeps – keine "
-            "zusätzliche Messung nötig. Rub & Buzz (Schleifen, Kratzen, lose Teile) zeigt sich an hohen "
-            "Harmonischen (10. – 20.), meist rund um die Resonanz und erst bei höherem Pegel: also mit "
-            "z. B. −10 … −3 dBFS messen. Akustischen Klirr misst nur ein Mikrofon.")
+            "zusätzliche Messung nötig. <b>Grenzen mit dem DATS V3:</b> Es liefert nur Kleinsignal, die "
+            "Membran bewegt sich kaum. Der Klirr des Treibers liegt dann meist unter dem Eigenklirr und "
+            "Rauschen der Soundkarte (Kurven „Wandler“ und „Rauschgrenze“). Aussagekräftig ist die "
+            "Messung vor allem für <b>grobe Fehler</b> wie eine schleifende Schwingspule oder lose Teile, "
+            "die schon bei kleiner Auslenkung Geräusche machen. Dazu mit dem höchsten Pegel messen, "
+            "der noch nicht übersteuert (z. B. −3 dBFS). Klirr bei echter Lautstärke braucht einen "
+            "Verstärker, akustischen Klirr misst nur ein Mikrofon.")
         hint.setWordWrap(True)
         hint.setTextFormat(QtCore.Qt.RichText)
         hint.setStyleSheet("color: palette(placeholder-text);")
@@ -150,6 +154,10 @@ class DistortionTab(QtWidgets.QWidget):
                 if np.isfinite(v):
                     lines.append(f"bei {f0:g} Hz: {v * 100:.3f} %")
         lines.append(f"<span style='color:{a.ok if kind == 'ok' else a.warn}'>{text}</span>")
+        if kind == "ok" and at_noise_floor(r):
+            lines.append(f"<span style='color:{a.muted}'>Der Klirr liegt überwiegend an der Messgrenze "
+                         "(Rauschen der Soundkarte). Mit dem DATS V3 allein ist das normal – die Membran "
+                         "bewegt sich kaum.</span>")
         self.verdict.setText("<br>".join(lines))
         self.draw()
 

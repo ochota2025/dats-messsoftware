@@ -29,7 +29,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 96 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 97 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -57,6 +57,9 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 
 - **PySide6-Essentials enthält keine Qt-Übersetzungen**: Standardknöpfe über `gui/de.py`
   (`button_box`, `ask`, `get_text`, `get_item`, `germanize`) eindeutschen, nie `QMessageBox.question` direkt.
+- **DATS V3 = Kleinsignal** (Soundkarte + Messwiderstand, kein Leistungsverstärker): Pegelreihe und
+  Klirr nie mit Großsignal-Versprechen beschreiben; der Simulator (`level_dependent`, `distortion`)
+  ist darauf gedämpft (Test `test_simulator_distortion_is_small_signal`). Großsignal kann das DATS LA.
 - **Diagramm-Skalierung** (0.2.14): `ImpedancePlot(name=…)` speichert Frequenzbereich + |Z| log unter
   `plot/<name>` (Standard 20 Hz – 20 kHz); `set_curves(autorange=True)` passt nur Y an (`setAutoVisible`).
   Qt-Tests brauchen eine `QApplication` (nicht `QCoreApplication`), sonst stürzen spätere Widget-Tests ab.
@@ -91,7 +94,7 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Installation ist editierbar (`pip install -e .`); das Flag `.venv/datsmess-editable.flag`
   steuert die einmalige Neu-Einbindung nach einem Update.
 
-## Stand und offene Punkte (08.11.2026, Version 0.2.15)
+## Stand und offene Punkte (08.11.2026, Version 0.2.16)
 
 **Läuft:** beim Tester unter Windows mit dem Simulator; Design im Stil des Icons (hell/dunkel),
 Kennwert-Kacheln, ausblendbare Seitenleiste, Qualitäts-Ampel, Geräte-Check, Pegelreihe, Vergleich,
@@ -117,8 +120,11 @@ echten Geräteliste des Testers bestätigt (Testfall in `tests/test_features.py`
 - Oberflächen-Durchläufe als feste Tests (bisher Hilfsskripte im Scratchpad)
 - WASAPI-Exklusivmodus (umgeht Windows-Mixer/Klangverbesserungen)
 - Deutsche Dezimalkommas in Anzeige/Eingaben; Einrichtungs-Assistent aus einem Guss
-- Simulator-Klirr erzeugt Artefakte in der Impedanzkurve, wenn er zu stark ist (schon zweimal
-  vom Tester bemerkt) – Alternative wäre Zeitfensterung der Oberwellen in der H-Schätzung
+- Simulator-Klirr erzeugte Artefakte in der Impedanzkurve, wenn er zu stark war (zweimal vom Tester
+  bemerkt). Seit 0.2.16 ist er ~30× schwächer (realistisch fürs DATS V3) – Thema vermutlich erledigt;
+  sonst Zeitfensterung der Oberwellen in der H-Schätzung
+- Großsignal-Betrieb (externer Verstärker + Spannungsteiler an den Eingängen) – erst nach dem Test
+  mit echtem DATS, dabei Ausgangsspannung und Serienwiderstand des V3 nachmessen
 - Bauplan „Messbrücke selbst bauen“ (Soundkarte mit Stereo-Line-In + Widerstand), Android-Version –
   erst nach erfolgreichem Test mit echtem DATS
 

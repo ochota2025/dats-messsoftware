@@ -75,9 +75,13 @@ class LevelTab(QtWidgets.QWidget):
         self.btn_run.setFont(fb)
         ll.addWidget(self.btn_run)
         hint = QtWidgets.QLabel(
-            "Zeigt, wie sich Resonanz und Güten mit dem Pegel ändern (Nachgiebigkeit, Verluste, "
-            "Erwärmung). Für T/S-Werte nach Datenblatt gilt meist der Kleinsignalbereich – dort, wo "
-            "sich die Werte kaum noch ändern. Vorsicht bei Hochtönern: hohe Pegel nur kurz.")
+            "Zeigt, wie sich Resonanz und Güten mit dem Pegel ändern. <b>Das DATS V3 liefert nur "
+            "Kleinsignal:</b> Es ist eine Soundkarte mit Messwiderstand, die Membran bewegt sich dabei "
+            "kaum. Zu erwarten sind Änderungen von wenigen Prozent, vor allem bei fs und Qms. "
+            "Großsignal-Verhalten (Auslenkung bis Xmax, Erwärmung) braucht einen Leistungsverstärker – "
+            "dafür gibt es eigene Geräte wie das DATS LA. Für T/S-Werte nach Datenblatt gilt ohnehin "
+            "der Kleinsignalbereich.")
+        hint.setTextFormat(QtCore.Qt.RichText)
         hint.setWordWrap(True)
         hint.setStyleSheet("color: palette(placeholder-text);")
         ll.addWidget(hint)

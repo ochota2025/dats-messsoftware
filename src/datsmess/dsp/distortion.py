@@ -163,6 +163,19 @@ def analyze(recordings: np.ndarray, cfg: SweepConfig, ref_channel: int = 0, meas
                             smooth(total(noise, LOW_ORDERS)), smooth(total(noise, HOHD_ORDERS)))
 
 
+def at_noise_floor(res: DistortionResult, lo: float = 20.0, hi: float = 2000.0) -> bool:
+    """True, wenn der Klirr (k2 … k5) im Band überwiegend höchstens doppelt so groß ist wie die
+    Rauschgrenze – typisch für das DATS V3 allein (Kleinsignal)."""
+    if res.noise_thd is None:
+        return False
+    band = (res.f >= lo) & (res.f <= hi) & np.isfinite(res.noise_thd)
+    if not band.any():
+        return False
+    thd, noise = res.thd[band], res.noise_thd[band]
+    below = ~np.isfinite(thd) | (thd <= 2.0 * noise)
+    return bool(np.mean(below) > 0.5)
+
+
 def rub_buzz_verdict(res: DistortionResult, limit_db: float = -50.0) -> tuple[str, str]:
     """("ok" | "warn", Text) anhand der höheren Harmonischen zwischen 20 Hz und 1 kHz."""
     band = (res.f >= 20.0) & (res.f <= 1000.0)

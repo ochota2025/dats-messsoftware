@@ -109,6 +109,18 @@ def test_rub_and_buzz_detected_only_on_rubbing_driver(eng):
     assert verdicts == {"driver": "ok", "driver_rub": "warn", "resistor": "ok"}
 
 
+def test_simulator_distortion_is_small_signal(eng):
+    """DATS V3 = Kleinsignal: Klirr eines intakten Treibers liegt an der Messgrenze."""
+    from datsmess.dsp.distortion import at_noise_floor
+    e, sim = eng
+    sim.distortion = True
+    sim.set_connection("driver")
+    m, _ = e.measure_impedance()
+    r = analyze(m.recordings, e.sweep)
+    assert at_noise_floor(r)
+    assert r.peak(r.thd, 20, 2000)[0] < 0.001              # unter 0,1 %
+
+
 def test_distortion_does_not_spoil_ts(eng):
     e, sim = eng
     sim.distortion = True
@@ -129,7 +141,7 @@ def test_level_dependence_and_samples(eng):
         e.sweep = e.sweep.with_(level_dbfs=lvl, sweep_exp=16)
         m, _ = e.measure_impedance()
         fs.append(fit_driver(m.f, m.Z).fs)
-    assert fs[1] < fs[0] * 0.98                     # lauter → tiefere Resonanz
+    assert fs[1] < fs[0] * 0.995                    # lauter → etwas tiefere Resonanz (Kleinsignal)
     assert sim.sample_driver(1) == sim.driver
     assert sim.sample_driver(3).fs != sim.driver.fs
 

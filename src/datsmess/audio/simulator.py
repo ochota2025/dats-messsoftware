@@ -14,6 +14,11 @@ Optional (für die Oberfläche eingeschaltet, in den Grundtests aus):
 * ``level_dependent`` – fs/Qms/Qes ändern sich mit dem Pegel (für Pegelreihen)
 * ``distortion``      – schwache Nichtlinearität des Treibers (Klirr), beim
                         Anschluss „Treiber mit Schleifgeräusch“ zusätzlich Rub & Buzz
+
+Beide Effekte sind bewusst klein gehalten (seit 0.2.16): Das DATS V3 ist eine USB-Soundkarte mit
+Messwiderstand und treibt den Lautsprecher nur mit Kleinsignal. Die Membran bewegt sich kaum,
+die Kennwerte ändern sich über den Pegelbereich nur um wenige Prozent, und der Klirr des Treibers
+liegt meist an der Messgrenze. Nur grobe Fehler (schleifende Schwingspule) fallen deutlich auf.
 """
 from __future__ import annotations
 
@@ -133,7 +138,8 @@ class SimulatorBackend(AudioBackend):
         if not self.level_dependent:
             return d
         x = amplitude - REF_LEVEL               # > 0: lauter als der Bezugspegel
-        return replace(d, fs=d.fs * (1 - 0.10 * x), Qms=d.Qms * (1 - 0.25 * x), Qes=d.Qes * (1 + 0.06 * x))
+        # Kleinsignal: −36 … −6 dBFS verschieben fs um gut 1 %, Qms um gut 3 %
+        return replace(d, fs=d.fs * (1 - 0.03 * x), Qms=d.Qms * (1 - 0.08 * x), Qes=d.Qes * (1 + 0.02 * x))
 
     def _driver_parts(self, f: np.ndarray, drv: SimDriver) -> tuple[np.ndarray, np.ndarray]:
         c = self.connection
@@ -194,7 +200,8 @@ class SimulatorBackend(AudioBackend):
         """Verzerrungen aus der Gegen-EMK (∝ Membrangeschwindigkeit): k2/k3 und optional Rub & Buzz."""
         _ze, zm = self._driver_parts(f, self.driver_at_level(REF_LEVEL))
         emf = np.fft.irfft(v_meas * zm / np.where(np.abs(z_dut) > 0, z_dut, 1.0), nfft)[:n]
-        out = 0.015 * emf ** 2 + 0.12 * emf ** 3       # ~0,1 % Klirr bei −10 dBFS an der Resonanz
+        # Kleinsignal: einige 0,001 % Klirr bei −10 dBFS an der Resonanz – meist an der Messgrenze
+        out = 0.0005 * emf ** 2 + 0.004 * emf ** 3
         if self.connection == "driver_rub":
             # „Schleifen“: kurzes Knacken (abklingender 3-kHz-Burst), jedes Mal wenn die Membran-
             # geschwindigkeit eine Schwelle überschreitet – kaum mehr THD, aber viele hohe Harmonische

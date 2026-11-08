@@ -52,7 +52,7 @@ Tests: `.venv/bin/python -m pytest`
 | FS-04 Projektarchiv .datsproj (Rohaufnahmen, Kalibrierungen, T/S, Treiberinfo + Notizen), bitgenau reproduzierbar | ✔ |
 | Datenblatt (A4) mit Kurve und Parametern als PDF oder Ausdruck | ✔ |
 | 8 Speicherplätze mit Tastenkürzeln, Sofort-Kennwerte, Hell/Dunkel | ✔ |
-| FA-01 Pegelabhängige Messreihen (fs, Q, Re über dem Pegel) | ✔ |
+| FA-01 Pegelabhängige Messreihen (fs, Q, Re über dem Pegel) | ✔ (DATS V3: nur Kleinsignal) |
 | FA-03 Rub & Buzz – elektrisch, aus dem Impedanz-Sweep (höhere Harmonische) | ✔ (akustisch nur mit Mikrofon) |
 | OS-01 Oszilloskop (Zeitverlauf mit Trigger, Spektrum, THD+N) | ✔ |
 | Messqualitäts-Ampel, Geräte-Check (Kanalzuordnung, R_ref, R_cal) | ✔ |
@@ -144,3 +144,9 @@ vor der linearen Antwort (Abstand `L·ln k`). `dsp/distortion.py` schneidet sie 
 Anteil heraus, der schon im Referenzkanal steckt (Wandler/Verstärker), und zieht die Rauschleistung
 ab, die aus der Stille nach dem Sweep geschätzt wird. Ausgewertet wird die Klemmenspannung –
 Rub & Buzz zeigt sich an den Harmonischen 10 … 20.
+
+**Grenzen mit dem DATS V3:** Es treibt den Lautsprecher nur mit Kleinsignal über einen
+Messwiderstand. Der Klirr eines intakten Treibers liegt dann meist an der Messgrenze
+(`at_noise_floor`); erkennbar sind vor allem grobe Fehler wie eine schleifende Schwingspule.
+Auch die Pegelreihe bleibt im Kleinsignalbereich (wenige Prozent Änderung). Großsignal-Messungen
+brauchen einen Leistungsverstärker. Der Simulator ist seit 0.2.16 auf dieses Maß gedämpft.

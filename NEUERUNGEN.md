@@ -1,5 +1,17 @@
 # Neuerungen
 
+## 0.2.16 – 08.11.2026
+
+- **Klarere Grenzen bei Pegelreihe und Klirr:** Das DATS V3 ist eine Soundkarte mit Messwiderstand
+  und liefert nur Kleinsignal, die Membran bewegt sich kaum. Die Hinweise in beiden Tabs sagen das
+  jetzt deutlich: Die Pegelreihe zeigt Änderungen von wenigen Prozent, nicht das Großsignal-Verhalten.
+  Die Klirrmessung findet vor allem grobe Fehler wie eine schleifende Schwingspule. Für echte
+  Lautstärke braucht es einen Verstärker (z. B. DATS LA).
+- Liegt der Klirr nur an der Messgrenze, sagt das Ergebnis das ausdrücklich.
+- **Simulator realistischer:** Klirr und Pegelabhängigkeit sind auf das Maß gesenkt, das mit dem
+  DATS V3 zu erwarten ist. Bisher sahen die Kurven im Simulator eindrucksvoller aus, als ein echtes
+  DATS V3 sie liefern kann.
+
 ## 0.2.15 – 08.11.2026
 
 - **Achsenbeschriftung einstellbar:** Unter *Ansicht → Darstellung … → Achsenbeschriftung* lassen
