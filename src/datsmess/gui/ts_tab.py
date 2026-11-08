@@ -53,6 +53,8 @@ class MeasurementCombo(QtWidgets.QComboBox):
 
 
 class TSTab(QtWidgets.QWidget):
+    datasheetRequested = QtCore.Signal()
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
@@ -148,6 +150,9 @@ class TSTab(QtWidgets.QWidget):
         fe.addWidget(self.btn_clip, 1, 0)
         fe.addWidget(self.btn_export, 1, 1)
         fe.addWidget(self.profile_hint, 2, 0, 1, 2)
+        self.btn_sheet = QtWidgets.QPushButton("Datenblatt (PDF / Drucken) …")
+        self.btn_sheet.clicked.connect(self.datasheetRequested.emit)
+        fe.addWidget(self.btn_sheet, 3, 0, 1, 2)
         for b in (self.btn_clip, self.btn_export):
             b.setEnabled(False)
         ll.addWidget(g_exp)
@@ -372,7 +377,7 @@ class TSTab(QtWidgets.QWidget):
         self.table.resizeColumnsToContents()
         self.table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
         self.warn.setText("\n".join(ts.warnings))
-        for b in (self.btn_clip, self.btn_export):
+        for b in (self.btn_clip, self.btn_export, self.btn_sheet):
             b.setEnabled(True)
         self._plot(ts, free, second)
 

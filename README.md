@@ -50,6 +50,8 @@ Tests: `.venv/bin/python -m pytest`
 | FS-02 T/S-Export als .tsp/.ini, Profile WinISD, VituixCAD, Boxsim, LEAP, AJ-Horn – Datei oder Zwischenablage | ✔ (siehe Hinweis) |
 | FS-03 Watch-Folder: atomare .zma-Übergabe (R_e verlustfrei im Kopf) + .tsp, optional automatisch nach jeder Messung | ✔ |
 | FS-04 Projektarchiv .datsproj (Rohaufnahmen, Kalibrierungen, T/S, Treiberinfo + Notizen), bitgenau reproduzierbar | ✔ |
+| Datenblatt (A4) mit Kurve und Parametern als PDF oder Ausdruck | ✔ |
+| 8 Speicherplätze mit Tastenkürzeln, Sofort-Kennwerte, Hell/Dunkel | ✔ |
 | FA-01 Pegelabhängige Messreihen | offen |
 | FA-03 Rub & Buzz | offen |
 | OS-01 Oszilloskop | offen |

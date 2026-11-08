@@ -15,6 +15,7 @@ from ..io.watch import WatchFolderConfig
 from ..measurement import ChannelConfig
 from .calibration_wizard import CalibrationWizard
 from .appearance import AppearanceDialog, appearance
+from .datasheet import DatasheetDialog
 from .de import ask
 from .dialogs import ProjectInfoDialog, WatchFolderDialog
 from .generator_tab import GeneratorTab
@@ -39,6 +40,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs = QtWidgets.QTabWidget()
         self.imp_tab = ImpedanceTab(self.state)
         self.ts_tab = TSTab(self.state)
+        self.ts_tab.datasheetRequested.connect(lambda: self.open_datasheet())
         self.lcr_tab = LCRTab(self.state)
         self.gen_tab = GeneratorTab(self.state)
         self.tabs.addTab(self.imp_tab, "Impedanz")
@@ -136,6 +138,12 @@ class MainWindow(QtWidgets.QMainWindow):
         dlg = ProjectInfoDialog(self.state.info, self)
         if dlg.exec() == QtWidgets.QDialog.Accepted:
             self.state.set_info(dlg.info())
+
+    def open_datasheet(self):
+        if not self.state.measurements:
+            QtWidgets.QMessageBox.information(self, "Datenblatt", "Noch keine Messung vorhanden.")
+            return
+        DatasheetDialog(self.state, self.ts_tab, self).exec()
 
     # -- Speicherplätze -------------------------------------------------------
     def _slot_for_ts(self, i: int, role: str):
@@ -309,6 +317,9 @@ class MainWindow(QtWidgets.QMainWindow):
         a.setShortcut(QtGui.QKeySequence("Ctrl+Shift+O"))
         a = m_file.addAction("Messkurve(n) exportieren …", self.imp_tab.export_selected)
         a.setShortcut(QtGui.QKeySequence("Ctrl+E"))
+        m_file.addSeparator()
+        a = m_file.addAction("Datenblatt (PDF / Drucken) …", self.open_datasheet)
+        a.setShortcut(QtGui.QKeySequence.Print)
         m_file.addSeparator()
         m_file.addAction("Watch-Folder einstellen …", self.edit_watch)
         a = m_file.addAction("An Watch-Folder übergeben", self.imp_tab.deliver_selected)

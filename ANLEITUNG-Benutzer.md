@@ -91,6 +91,12 @@ Qts, Zmax und Le – je eine Spalte pro sichtbarer Kurve (#1 … #8 = Speicherpl
 Messung). So lassen sich Chassis direkt vergleichen. Bei Widerständen, Kondensatoren usw.
 steht „–“. Vas, Mms und Bl brauchen eine Zweitmessung (Tab „T/S-Parameter“).
 
+**Datenblatt:** *Datei → Datenblatt (PDF / Drucken) …* (Strg+P bzw. ⌘P) oder der Knopf im
+Tab „T/S-Parameter“. Eine A4-Seite mit Impedanz- und Phasenkurve, allen Parametern,
+Messbedingungen und den Notizen aus *Datei → Projektinfo & Notizen*. Mit „Als PDF speichern“
+oder „Drucken“. Für das vollständige Blatt (mit Vas, Mms, Bl) vorher im Tab „T/S-Parameter“
+rechnen; sonst enthält es nur die Kennwerte der gewählten Messung.
+
 ## 7. Mit echtem DATS V3
 
 1. DATS per USB anschließen und das Programm starten.
