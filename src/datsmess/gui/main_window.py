@@ -26,6 +26,7 @@ from .datasheet import DatasheetDialog
 from .de import ask
 from .device_check import DeviceCheckWizard
 from .device_dialog import DeviceDialog
+from .device_watch import DeviceWatcher
 from .dialogs import ProjectInfoDialog, WatchFolderDialog
 from .distortion_tab import DistortionTab
 from .generator_tab import GeneratorTab
@@ -112,13 +113,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._hotplug_timer = QtCore.QTimer(self)
         self._hotplug_timer.setSingleShot(True)
         self._hotplug_timer.timeout.connect(self._on_devices_changed)
-        try:                                        # Ein-/Ausstecken bemerken (ohne PortAudio zu stören)
-            from PySide6.QtMultimedia import QMediaDevices
-            self._media_devices = QMediaDevices(self)
-            self._media_devices.audioInputsChanged.connect(lambda: self._hotplug_timer.start(1500))
-            self._media_devices.audioOutputsChanged.connect(lambda: self._hotplug_timer.start(1500))
-        except Exception as e:                      # noqa: BLE001
-            log.info("Geräteüberwachung nicht verfügbar (%s) – ↻ liest die Liste neu ein", e)
+        self._device_watch = DeviceWatcher(self)    # Ein-/Ausstecken bemerken (ohne PortAudio zu stören)
+        self._device_watch.changed.connect(lambda: self._hotplug_timer.start(1500))
+        log.info("Geräteüberwachung: %s", self._device_watch.mode)
         self.state.dirty = False
         self._update_title()
         self.state.status.emit("Bereit.")

@@ -1,5 +1,12 @@
 # Neuerungen
 
+## 0.2.5 – 08.11.2026
+
+- **Behoben:** Unter Windows hat die Überwachung von Ein- und Ausstecken in 0.2.4 nicht
+  gearbeitet. Das schlanke Qt-Paket enthält dort das dafür vorgesehene Multimedia-Modul nicht.
+  Jetzt fragt das Programm die Geräteliste alle 2 Sekunden direkt bei Windows ab. Das erkennt
+  Einstecken und Abziehen ebenso wie „Deaktivieren/Aktivieren“ in den Sound-Einstellungen.
+
 ## 0.2.4 – 08.11.2026
 
 - **Ein- und Ausstecken wird bemerkt:** Wird ein Audiogerät angeschlossen oder getrennt, liest das

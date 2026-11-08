@@ -318,3 +318,27 @@ def test_device_marked_as_dats_by_key():
     marked = device_choices(devs, 48000, supports=lambda i, o, fs: True, dats_keys={plain.key})[0]
     assert marked.is_dats and not marked.dimmed and marked.label.startswith("★")
     assert "Als DATS bestätigt" in marked.reason
+
+
+def test_device_watcher_polls_signature(qtbot=None):
+    """Windows-Weg (ohne QtMultimedia): Änderung der Geräte-Signatur löst ``changed`` aus."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6 import QtCore
+    app = QtCore.QCoreApplication.instance() or QtCore.QCoreApplication([])
+    from datsmess.gui.device_watch import DeviceWatcher, windows_device_signature
+    import sys
+    if sys.platform != "win32":
+        assert windows_device_signature() is None
+    sig = {"v": (("Mikrofon (DATS V3)", 2),), }
+    w = DeviceWatcher(interval_ms=10, signature=lambda: sig["v"])
+    assert w.mode == "Windows-Geräteabfrage"
+    hits = []
+    w.changed.connect(lambda: hits.append(1))
+    w._poll()
+    assert hits == []
+    sig["v"] = ()
+    w._poll()
+    w._poll()
+    assert hits == [1]
+    del app
