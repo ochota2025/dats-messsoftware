@@ -56,8 +56,9 @@ class SlotBar(QtWidgets.QWidget):
                 short = m.name if len(m.name) <= 16 else m.name[:15] + "…"
                 b.setText(f"{i + 1}  {short}")
                 b.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-                b.setMinimumWidth(b.fontMetrics().horizontalAdvance(b.text()) + 22)
-                b.setMaximumWidth(max(240, b.minimumWidth()))
+                full = b.fontMetrics().horizontalAdvance(b.text()) + 22
+                b.setMinimumWidth(min(full, 44))      # darf schrumpfen (Name steht im Tooltip)
+                b.setMaximumWidth(max(240, full))
             else:
                 b.setText(str(i + 1))
                 b.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)

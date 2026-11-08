@@ -7,6 +7,8 @@ relevant); die Änderungen stehen in ``NEUERUNGEN.md`` im Projektordner.
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -99,3 +101,26 @@ def local_changelog(root: Path = PROJECT_ROOT) -> str:
         return (root / CHANGELOG).read_text(encoding="utf-8")
     except OSError:
         return ""
+
+
+def launch_updater(root: Path = PROJECT_ROOT) -> str | None:
+    """Startet das Update-Skript in einem eigenen Fenster; es wartet, bis das Programm geschlossen
+    ist, aktualisiert und startet das Programm neu. Rückgabe: Fehlermeldung oder ``None``."""
+    try:
+        if sys.platform == "win32":
+            ps1 = root / "tools" / "update.ps1"
+            if not ps1.exists():
+                return f"{ps1} fehlt."
+            subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1),
+                              "-FromApp"], cwd=str(root), close_fds=True,
+                             creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+            return None
+        if sys.platform == "darwin":
+            cmd = root / "Update-Mac.command"
+            if not cmd.exists():
+                return f"{cmd} fehlt."
+            subprocess.Popen(["open", "-a", "Terminal", str(cmd)], close_fds=True)
+            return None
+        return "Automatisches Aktualisieren gibt es nur unter Windows und macOS."
+    except OSError as e:
+        return str(e)

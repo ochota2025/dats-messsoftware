@@ -72,6 +72,10 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Unter Windows läuft `pythonw` ohne Konsole: Fehler gehen ins Protokoll (`datsmess.log` im
   App-Datenordner) und in den Fehlerdialog; `print` ist dort unsichtbar.
 - **Szene in PDF rendern** skaliert Schriften doppelt → im Datenblatt über ein Zwischenbild (96 dpi, ×3).
+- Update-Ablauf: `tools/update.ps1` (bzw. `Update-Mac.command`) wartet, bis das Programm geschlossen
+  ist, aktualisiert und startet es nur bei Erfolg neu; `-FromApp` (Knopf „Jetzt aktualisieren“,
+  `updates.launch_updater`) startet auch nach einem Fehler die alte Version wieder. Änderungen an
+  den Update-Skripten wirken erst beim *übernächsten* Update – das nächste läuft mit dem alten Skript.
 - Startdateien: `.bat` und `tools/update.ps1` nur ASCII und CRLF. Update-Skripte so bauen, dass
   sie sich während des Laufs selbst überschreiben dürfen (bash: alles in einer Funktion; .bat: eine Zeile).
 - Installation ist editierbar (`pip install -e .`); das Flag `.venv/datsmess-editable.flag`

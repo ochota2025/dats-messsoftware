@@ -11,6 +11,7 @@ from ..analysis.quality import GRADE_LABEL, grade
 from ..io.formats import FORMATS, TextExportOptions, export_impedance, import_impedance
 from ..measurement import Measurement, reprocess
 from .appearance import appearance
+from .flow import FlowLayout
 from .de import germanize, get_item, get_text
 from .params_panel import QuickParams
 from .slots import SlotBar
@@ -24,38 +25,47 @@ class ImpedanceTab(QtWidgets.QWidget):
         super().__init__()
         self.state = state
 
-        # Werkzeugleiste
-        bar = QtWidgets.QHBoxLayout()
+        # Werkzeugleiste (umbrechend, damit sie keine Mindestbreite erzwingt)
+        self.toolbar = QtWidgets.QWidget()
+        bar = FlowLayout(self.toolbar, h_spacing=10)
         self.view = QtWidgets.QComboBox()
         for k, v in VIEWS.items():
             self.view.addItem(v, k)
         self.smoothing = QtWidgets.QComboBox()
         self.smoothing.addItems(list(SMOOTHING))
-        self.log_y = QtWidgets.QCheckBox("|Z| logarithmisch")
+        for cb in (self.view, self.smoothing):      # dürfen schmal werden, damit das Fenster klein bleibt
+            cb.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            cb.setMinimumContentsLength(13)
+            cb.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+        self.log_y = QtWidgets.QCheckBox("|Z| log")
+        self.log_y.setToolTip("|Z| logarithmisch darstellen")
         self.auto_hide = QtWidgets.QCheckBox("Ältere ausblenden")
         self.auto_hide.setToolTip("Bei einer neuen Messung alle Messungen ausblenden, "
                                   "die auf keinem Speicherplatz liegen")
         self.auto_hide.setChecked(state.auto_hide)
         self.auto_hide.toggled.connect(lambda on: setattr(state, "auto_hide", on))
-        btn_fit = QtWidgets.QPushButton("Ansicht anpassen")
-        bar.addWidget(QtWidgets.QLabel("Ansicht:"))
-        bar.addWidget(self.view)
-        bar.addSpacing(12)
-        bar.addWidget(QtWidgets.QLabel("Glättung:"))
-        bar.addWidget(self.smoothing)
-        bar.addSpacing(12)
-        bar.addWidget(self.log_y)
-        bar.addSpacing(12)
-        bar.addWidget(self.auto_hide)
-        bar.addStretch(1)
-        bar.addWidget(btn_fit)
+        btn_fit = QtWidgets.QPushButton("Alles zeigen")
+        btn_fit.setToolTip("Achsen an die Kurven anpassen")
+
+        def group(label, widget):
+            g = QtWidgets.QWidget()
+            h = QtWidgets.QHBoxLayout(g)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(5)
+            h.addWidget(QtWidgets.QLabel(label))
+            h.addWidget(widget)
+            return g
+
+        for wdg in (group("Ansicht:", self.view), group("Glättung:", self.smoothing), self.log_y,
+                    self.auto_hide, btn_fit):
+            bar.addWidget(wdg)                      # bricht bei schmalem Fenster in die nächste Zeile um
 
         self.plot = ImpedancePlot()
 
         # Messliste
         side = QtWidgets.QWidget()
-        side.setMaximumWidth(340)
-        side.setMinimumWidth(250)
+        side.setMaximumWidth(360)
+        side.setMinimumWidth(270)
         sl = QtWidgets.QVBoxLayout(side)
         sl.setContentsMargins(0, 0, 0, 0)
         self.params = QuickParams(state)
@@ -64,6 +74,8 @@ class ImpedanceTab(QtWidgets.QWidget):
         self.list = QtWidgets.QListWidget()
         self.list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.list.setIconSize(QtCore.QSize(30, 14))
+        self.params.focus_provider = self.current_measurement      # Kacheln: markierte bzw. neueste Messung
+        self.list.itemSelectionChanged.connect(self.params._schedule)
         sl.addWidget(self.list, 1)
         grid = QtWidgets.QGridLayout()
         self.btn_import = QtWidgets.QPushButton("Importieren …")
@@ -86,7 +98,7 @@ class ImpedanceTab(QtWidgets.QWidget):
         pw = QtWidgets.QWidget()
         pl = QtWidgets.QVBoxLayout(pw)
         pl.setContentsMargins(0, 0, 0, 0)
-        pl.addLayout(bar)
+        pl.addWidget(self.toolbar)
         self.slot_bar = SlotBar(state, self.current_measurement)
         pl.addWidget(self.slot_bar)
         pl.addWidget(self.plot, 1)

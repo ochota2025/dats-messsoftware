@@ -1,5 +1,20 @@
 # Neuerungen
 
+## 0.2.6 – 08.11.2026
+
+- **Kennwerte als große Kacheln:** fs, Qts (hervorgehoben), Re, Qes, Zmax, Qms, Le und die
+  Messqualität sind jetzt gut lesbar. Gezeigt wird die in der Liste markierte Messung, sonst die
+  neueste. Sind mehrere Kurven sichtbar, steht darunter eine Vergleichstabelle.
+- **Seitenleiste ausblendbar:** ☰ links neben den Reitern oder *Ansicht → Seitenleiste anzeigen*
+  (Strg+B). Der Mess-Knopf erscheint dann kompakt oben rechts. Ohne Seitenleiste lässt sich das
+  Fenster auf etwa 780 Pixel verkleinern; die Werkzeugleiste bricht bei Bedarf in eine zweite
+  Zeile um.
+- **Jetzt aktualisieren:** Der Hinweis auf eine neue Version hat einen Knopf, der das Programm
+  schließt, die neue Version holt und sie wieder startet.
+- **Update-Dateien starten das Programm danach automatisch** (nur bei Erfolg; bei einem Fehler
+  bleibt das Fenster mit der Meldung offen). Läuft das Programm noch, wartet das Update, bis es
+  geschlossen ist. *Wirkt ab dem nächsten Update* – dieses hier läuft noch mit dem alten Skript.
+
 ## 0.2.5 – 08.11.2026
 
 - **Behoben:** Unter Windows hat die Überwachung von Ein- und Ausstecken in 0.2.4 nicht

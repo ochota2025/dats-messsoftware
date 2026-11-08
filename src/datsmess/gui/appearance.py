@@ -308,6 +308,12 @@ QSlider::handle:horizontal {{ width: 14px; height: 14px; margin: -6px 0; border-
 QSlider::sub-page:horizontal {{ background: {a.accent}; border-radius: 2px; }}
 QWizard QFrame {{ background: transparent; }}
 QWidget#plotCard {{ background: {a.plot_bg}; border: 1px solid {a.border}; border-radius: 12px; }}
+QFrame#tile, QFrame#tileAccent {{ background: {a.header_bg}; border: 1px solid {a.border}; border-radius: 10px; }}
+QFrame#tileAccent {{ background: {a.accent_tint}; border-color: {a.accent}; }}
+QLabel#tileLabel {{ color: {a.muted}; font-size: 11px; font-weight: 600; background: transparent; }}
+QLabel#tileValue {{ color: {a.text}; font-size: 21px; font-weight: 700; background: transparent; }}
+QLabel#tileUnit {{ color: {a.muted}; font-size: 12px; background: transparent; padding-bottom: 3px; }}
+QLabel#tileTitle {{ font-size: 13px; color: {a.text}; }}
 """
 
 

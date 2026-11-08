@@ -53,8 +53,12 @@ persönliche Ordnernamen. Bei einem Programmfehler öffnet sich der Bericht von 
 2. Im Ordner doppelklicken:
    - Windows: **`Update-Windows.bat`**
    - Mac: **`Update-Mac.command`**
-3. Wenn „Update fertig“ erscheint: Fenster schließen und wie gewohnt starten.
-   Beim ersten Start nach einem Update steht kurz „Neue Version wird eingerichtet“.
+3. Das Programm startet nach dem Update von selbst (ab Version 0.2.6). Schlägt das Update fehl,
+   bleibt das Fenster mit der Meldung offen. Beim ersten Start nach einem Update steht kurz
+   „Neue Version wird eingerichtet“.
+
+**Noch einfacher:** Meldet das Programm beim Start „Neue Version verfügbar“, genügt ein Klick auf
+**Jetzt aktualisieren** – das Programm schließt sich, holt die neue Version und startet wieder.
 
 Deine Messungen und Projektdateien (`.datsproj`) bleiben dabei unverändert, solange du sie
 nicht im Programmordner selbst speicherst. Am besten legst du sie in einen eigenen Ordner.

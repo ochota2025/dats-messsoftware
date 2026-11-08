@@ -81,11 +81,27 @@ class MainWindow(QtWidgets.QMainWindow):
                         (self.gen_tab, "Generator && Oszilloskop")):
             self.tabs.addTab(w, name)
 
+        # Seitenleiste ein-/ausblenden; bei ausgeblendeter Leiste sitzt ein kompakter Mess-Knopf oben rechts
+        self.btn_sidebar = QtWidgets.QToolButton()
+        self.btn_sidebar.setText("☰")
+        self.btn_sidebar.setToolTip("Seitenleiste ein-/ausblenden (Strg+B)")
+        self.btn_sidebar.setCheckable(True)
+        self.btn_sidebar.setChecked(True)
+        self.btn_sidebar.toggled.connect(self.set_sidebar_visible)
+        self.tabs.setCornerWidget(self.btn_sidebar, QtCore.Qt.TopLeftCorner)
+        self.btn_measure_compact = QtWidgets.QPushButton("Impedanz messen")
+        self.btn_measure_compact.setObjectName("primary")
+        self.btn_measure_compact.setStyleSheet("font-size: 13px; padding: 4px 16px; border-radius: 8px;")
+        self.btn_measure_compact.setToolTip("Impedanz messen (Strg+M) – Einstellungen in der Seitenleiste (☰)")
+        self.btn_measure_compact.clicked.connect(self.measure)
+        self.btn_measure_compact.setVisible(False)
+        self.tabs.setCornerWidget(self.btn_measure_compact, QtCore.Qt.TopRightCorner)
+
         split = QtWidgets.QSplitter()
         split.addWidget(self.sidebar_scroll)
         split.addWidget(self.tabs)
         split.setStretchFactor(1, 1)
-        split.setSizes([365, 1035])
+        split.setSizes([385, 1015])
         self.setCentralWidget(split)
         self._build_menu()
 
@@ -331,6 +347,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 and appearance().current.palette != old_palette:
             self.state.recolor_measurements()
 
+    def set_sidebar_visible(self, on: bool):
+        """Seitenleiste (Hardware, Kalibrierung, Messung) ein- oder ausblenden – spart Platz im Fenster."""
+        self.sidebar_scroll.setVisible(on)
+        self.btn_measure_compact.setVisible(not on)
+        for w in (self.btn_sidebar, self.act_sidebar):
+            w.blockSignals(True)
+            w.setChecked(on)
+            w.blockSignals(False)
+        self.settings.setValue("sidebar_visible", on)
+
     def _toggle_dark(self, on: bool):
         cur = appearance().current
         if cur.dark != on:
@@ -382,7 +408,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row = QtWidgets.QHBoxLayout()
         self.cb_device = QtWidgets.QComboBox()
         self.cb_device.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.cb_device.setMinimumContentsLength(10)
+        self.cb_device.setMinimumContentsLength(8)
         # Standard-Delegate: beachtet die graue Schrift (ForegroundRole) auch mit Stylesheet
         self.cb_device.setItemDelegate(QtWidgets.QStyledItemDelegate(self.cb_device))
         btn_refresh = QtWidgets.QToolButton()
@@ -504,7 +530,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sidebar_scroll.setObjectName("sidebarScroll")
         self.sidebar_scroll.setWidget(w)
         self.sidebar_scroll.setWidgetResizable(True)
-        self.sidebar_scroll.setMinimumWidth(355)
+        self.sidebar_scroll.setMinimumWidth(375)
         self.sidebar_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.sidebar_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
 
@@ -570,6 +596,11 @@ class MainWindow(QtWidgets.QMainWindow):
         m_view = mb.addMenu("&Ansicht")
         a = m_view.addAction("Darstellung …", self.edit_appearance)
         a.setShortcut(QtGui.QKeySequence("Ctrl+,"))
+        self.act_sidebar = m_view.addAction("Seitenleiste anzeigen")
+        self.act_sidebar.setCheckable(True)
+        self.act_sidebar.setChecked(True)
+        self.act_sidebar.setShortcut(QtGui.QKeySequence("Ctrl+B"))
+        self.act_sidebar.toggled.connect(self.set_sidebar_visible)
         self.act_dark = m_view.addAction("Dunkler Modus")
         self.act_dark.setCheckable(True)
         self.act_dark.setChecked(appearance().current.dark)
@@ -674,17 +705,34 @@ class MainWindow(QtWidgets.QMainWindow):
         box.setWindowTitle("Neue Version verfügbar")
         box.setTextFormat(QtCore.Qt.RichText)
         box.setText(f"<b>Version {info.version}</b> ist verfügbar (installiert: {__version__}).<br><br>"
-                    f"Zum Aktualisieren: Programm schließen und im Programmordner <b>{upd}</b> doppelklicken.")
+                    "<b>Jetzt aktualisieren</b> schließt das Programm, holt die neue Version und startet "
+                    f"sie wieder. Alternativ: Programm schließen und <b>{upd}</b> doppelklicken.")
         if info.changes:
             box.setDetailedText(info.changes)
-        box.addButton("OK", QtWidgets.QMessageBox.AcceptRole)
-        b_skip = box.addButton("Für diese Version nicht mehr anzeigen", QtWidgets.QMessageBox.RejectRole)
+        b_now = box.addButton("Jetzt aktualisieren", QtWidgets.QMessageBox.AcceptRole)
+        box.addButton("Später", QtWidgets.QMessageBox.RejectRole)
+        b_skip = box.addButton("Diese Version überspringen", QtWidgets.QMessageBox.RejectRole)
         b_folder = box.addButton("Programmordner öffnen", QtWidgets.QMessageBox.ActionRole)
+        box.setDefaultButton(b_now)
         box.exec()
-        if box.clickedButton() is b_skip:
+        if box.clickedButton() is b_now:
+            self.update_now()
+        elif box.clickedButton() is b_skip:
             self.settings.setValue("update_skip", info.version)
         elif box.clickedButton() is b_folder:
             QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(updates.PROJECT_ROOT)))
+
+    def update_now(self):
+        """Update-Skript starten und das Programm schließen; das Skript startet es danach neu."""
+        if not self._confirm_discard():
+            return
+        err = updates.launch_updater()
+        if err:
+            errors.show_error(self, "Jetzt aktualisieren", f"Das Update konnte nicht gestartet werden:\n{err}")
+            return
+        log.info("Update gestartet – Programm wird beendet")
+        self.state.dirty = False                # schon gefragt – nicht noch einmal beim Schließen
+        self.close()
 
     # -- Geräte ---------------------------------------------------------
     def _json_list(self, key: str) -> list[str] | None:
@@ -970,6 +1018,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _busy(self, busy):
         self.btn_measure.setEnabled(not busy)
+        self.btn_measure_compact.setEnabled(not busy)
         self.btn_cal.setEnabled(not busy)
         self.btn_check.setEnabled(not busy)
         self.progress.setRange(0, 0)
@@ -995,6 +1044,7 @@ class MainWindow(QtWidgets.QMainWindow):
         geo = s.value("geometry")
         if geo is not None:
             self.restoreGeometry(geo)
+        self.set_sidebar_visible(s.value("sidebar_visible", True, type=bool))
         try:
             self.state.watch = WatchFolderConfig.from_dict(json.loads(s.value("watch_folder", "{}")))
         except (ValueError, TypeError):
