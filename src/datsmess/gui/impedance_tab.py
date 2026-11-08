@@ -96,6 +96,7 @@ class ImpedanceTab(QtWidgets.QWidget):
         self.view.currentIndexChanged.connect(lambda: self.plot.set_mode(self.view.currentData()))
         self.smoothing.currentIndexChanged.connect(lambda _i: self.redraw())
         self.log_y.toggled.connect(self.plot.set_log_y)
+        self.plot.logYChanged.connect(self._sync_log_y)
         btn_fit.clicked.connect(lambda: (self.plot.top.enableAutoRange(), self.plot.bottom.enableAutoRange()))
         self.list.itemChanged.connect(self._item_changed)
         self.list.itemDoubleClicked.connect(lambda it: self._rename(it.data(QtCore.Qt.UserRole)))
@@ -146,6 +147,11 @@ class ImpedanceTab(QtWidgets.QWidget):
         if it.text() != m.name:
             m.name = it.text()
         self.redraw()
+
+    def _sync_log_y(self, on: bool):
+        self.log_y.blockSignals(True)
+        self.log_y.setChecked(on)
+        self.log_y.blockSignals(False)
 
     def _selected(self) -> list[Measurement]:
         return [it.data(QtCore.Qt.UserRole) for it in self.list.selectedItems()]
