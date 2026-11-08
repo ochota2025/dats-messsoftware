@@ -7,8 +7,10 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 import json
 
+from ..analysis.quality import GRADE_LABEL, grade
 from ..io.formats import FORMATS, TextExportOptions, export_impedance, import_impedance
 from ..measurement import Measurement, reprocess
+from .appearance import appearance
 from .de import germanize, get_item, get_text
 from .params_panel import QuickParams
 from .slots import SlotBar
@@ -61,6 +63,7 @@ class ImpedanceTab(QtWidgets.QWidget):
         sl.addWidget(QtWidgets.QLabel("<b>Messungen</b> (Haken = im Diagramm)"))
         self.list = QtWidgets.QListWidget()
         self.list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.list.setIconSize(QtCore.QSize(30, 14))
         sl.addWidget(self.list, 1)
         grid = QtWidgets.QGridLayout()
         self.btn_import = QtWidgets.QPushButton("Importieren …")
@@ -112,6 +115,7 @@ class ImpedanceTab(QtWidgets.QWidget):
         self.btn_reprocess.clicked.connect(self._reprocess)
         self.btn_watch.clicked.connect(self.deliver_selected)
         state.measurementsChanged.connect(self.refresh)
+        appearance().changed.connect(self.refresh)
 
     # ------------------------------------------------------------------
     def refresh(self):
@@ -122,15 +126,38 @@ class ImpedanceTab(QtWidgets.QWidget):
             it.setData(QtCore.Qt.UserRole, m)
             it.setFlags(it.flags() | QtCore.Qt.ItemIsUserCheckable)
             it.setCheckState(QtCore.Qt.Checked if m.visible else QtCore.Qt.Unchecked)
-            pm = QtGui.QPixmap(14, 14)
-            pm.fill(QtGui.QColor(m.color or "#000"))
-            it.setIcon(QtGui.QIcon(pm))
+            q = m.meta.get("quality")
+            g, msgs = grade(q) if q else (None, [])
+            it.setIcon(self._icon(m.color or "#000", g))
             tip = [m.created, "kalibriert" if m.meta.get("calibrated") else "unkalibriert / importiert",
                    m.meta.get("device", m.meta.get("source", ""))]
+            if g is not None:
+                tip.append(f"Messqualität: {GRADE_LABEL[g]}"
+                           + (f" (S/N {q['snr_db']:.0f} dB)" if q.get("snr_db") is not None else ""))
+                tip += [f"• {t}" for t in msgs]
+            if m.meta.get("correction"):
+                tip.append(f"Korrektur: {m.meta['correction']}")
             it.setToolTip("\n".join(t for t in tip if t))
             self.list.addItem(it)
         self.list.blockSignals(False)
         self.redraw(autorange=True)
+
+    @staticmethod
+    def _icon(color: str, quality: str | None) -> QtGui.QIcon:
+        """Farbfeld der Kurve + Qualitätspunkt (grün/gelb/rot)."""
+        pm = QtGui.QPixmap(30, 14)
+        pm.fill(QtCore.Qt.transparent)
+        p = QtGui.QPainter(pm)
+        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setPen(QtCore.Qt.NoPen)
+        p.setBrush(QtGui.QColor(color))
+        p.drawRoundedRect(QtCore.QRectF(0, 1, 13, 12), 3, 3)
+        if quality is not None:
+            a = appearance().current
+            p.setBrush(QtGui.QColor({"ok": a.ok, "warn": a.warn, "bad": a.err}[quality]))
+            p.drawEllipse(QtCore.QRectF(18, 2.5, 9, 9))
+        p.end()
+        return QtGui.QIcon(pm)
 
     def redraw(self, autorange=False):
         sm = SMOOTHING[self.smoothing.currentText()]

@@ -1,12 +1,13 @@
 """Gemeinsamer Anwendungszustand und Hintergrund-Ausführung von Messungen."""
 from __future__ import annotations
 
+import logging
 import re
-import traceback
 from pathlib import Path
 
 from PySide6 import QtCore
 
+from ..analysis.quality import summary
 from ..audio.backend import AudioBackend
 from ..audio.simulator import SimulatorBackend
 from ..dsp.calibration import Calibration
@@ -15,6 +16,9 @@ from ..io.ts_export import DriverInfo
 from ..io.watch import WatchFolderConfig, deliver
 from ..measurement import Measurement, MeasurementEngine
 from .appearance import appearance
+
+log = logging.getLogger("datsmess")
+
 
 class FnThread(QtCore.QThread):
     done = QtCore.Signal(object)
@@ -28,7 +32,7 @@ class FnThread(QtCore.QThread):
         try:
             self.done.emit(self.fn())
         except Exception as e:      # noqa: BLE001 – Fehler an die Oberfläche melden
-            traceback.print_exc()
+            log.exception("Fehler im Hintergrund")
             self.error.emit(f"{type(e).__name__}: {e}")
 
 
@@ -48,6 +52,9 @@ class AppState(QtCore.QObject):
     projectChanged = QtCore.Signal()        # Titel / Dirty-Status / Treiberinfo
     projectLoaded = QtCore.Signal()         # komplettes Projekt ersetzt (T/S-Tab neu befüllen)
     slotsChanged = QtCore.Signal()
+    progress = QtCore.Signal(int, int)      # Fortschritt längerer Abläufe (aus dem Hintergrund-Thread)
+    audioStopped = QtCore.Signal()          # Generator/Oszilloskop wurde beendet
+    failed = QtCore.Signal(str, str)        # Titel, Meldung – Fehler ohne eigene Behandlung
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -230,7 +237,17 @@ class AppState(QtCore.QObject):
     def is_simulator(self) -> bool:
         return self.backend.is_simulator
 
+    def stop_audio(self):
+        try:
+            self.backend.stop()
+        except Exception:       # noqa: BLE001
+            log.exception("Audio stoppen")
+        self.audioStopped.emit()
+
     def set_backend(self, backend: AudioBackend):
+        if self.engine.backend is not backend:
+            self.stop_audio()
+        log.info("Gerät: %s", backend.describe())
         self.engine.backend = backend
         self.engine.calibration = None
         self.load_calibration()
@@ -250,6 +267,7 @@ class AppState(QtCore.QObject):
         self.calibrationChanged.emit()
 
     def set_calibration(self, cal: Calibration | None):
+        log.info("Kalibrierung %s", f"gesetzt: {', '.join(cal.steps)}, R_cal {cal.r_cal:g} Ω" if cal else "verworfen")
         self.engine.calibration = cal
         if cal is not None:
             self.known_calibrations[cal.id] = cal
@@ -302,6 +320,8 @@ class AppState(QtCore.QObject):
         if self.busy:
             self.status.emit("Bitte warten – es läuft bereits eine Messung.")
             return False
+        if self.backend.streaming:          # Generator/Oszilloskop würde das Gerät blockieren
+            self.stop_audio()
         self.busy = True
         self.busyChanged.emit(True)
         self.status.emit(text)
@@ -323,6 +343,8 @@ class AppState(QtCore.QObject):
             self.status.emit(f"Fehler: {msg}")
             if on_error:
                 on_error(msg)
+            else:
+                self.failed.emit("Messung fehlgeschlagen", msg)
 
         th.done.connect(ok)
         th.error.connect(err)
@@ -343,10 +365,14 @@ class AppState(QtCore.QObject):
             m, raw = result
             self.add_measurement(m)
             msgs = [f"„{m.name}“ gemessen ({len(m.f)} Frequenzpunkte)"]
-            if raw.clipped:
-                msgs.append("WARNUNG: Übersteuerung – Pegel reduzieren!")
-            if raw.peak_meas < 1e-3:
-                msgs.append("WARNUNG: kaum Signal am Messkanal – Verbindung prüfen.")
+            if raw.quality is not None:
+                msgs.append(summary(raw.quality))
+                log.info("Messung „%s“: %s", m.name, summary(raw.quality))
+            else:
+                if raw.clipped:
+                    msgs.append("WARNUNG: Übersteuerung – Pegel reduzieren!")
+                if raw.peak_meas < 1e-3:
+                    msgs.append("WARNUNG: kaum Signal am Messkanal – Verbindung prüfen.")
             if not self.engine.calibrated:
                 msgs.append("unkalibriert")
             if self.watch.auto and self.watch.path:

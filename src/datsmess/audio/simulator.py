@@ -7,14 +7,24 @@ Kalibrierung und Auswertung ohne Hardware entwickelt und geprüft werden können
 * unterschiedliche Kanalverstärkung, AC-Kopplung (Hochpass) je Kanal
 * Kabel- und Übergangswiderstand + Leitungsinduktivität
 * Latenz, 16-Bit-Quantisierung, Rauschen
+
+Optional (für die Oberfläche eingeschaltet, in den Grundtests aus):
+
+* ``sample``          – Treiber-Exemplar 1 … 8 mit Fertigungsstreuung (1 = Nennwerte)
+* ``level_dependent`` – fs/Qms/Qes ändern sich mit dem Pegel (für Pegelreihen)
+* ``distortion``      – schwache Nichtlinearität des Treibers (Klirr), beim
+                        Anschluss „Treiber mit Schleifgeräusch“ zusätzlich Rub & Buzz
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass, replace
 
 import numpy as np
 
 from .backend import AudioBackend
+
+REF_LEVEL = 10 ** (-10 / 20)        # Bezugspegel −10 dBFS: dort gelten die Nennwerte
 
 
 @dataclass
@@ -46,14 +56,21 @@ class SimDriver:
     def Vas(self) -> float:
         return 1.204 * 343.2 ** 2 * self.Sd ** 2 * self.Cms
 
-    def impedance(self, f: np.ndarray, added_mass: float = 0.0, box_volume: float | None = None) -> np.ndarray:
+    def parts(self, f: np.ndarray, added_mass: float = 0.0,
+              box_volume: float | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """(elektrischer Teil Ze, Bewegungsimpedanz Zmot)."""
         w = 2 * np.pi * np.maximum(f, 1e-3)
         cms = self.Cms
         if box_volume:
             cmb = box_volume / (1.204 * 343.2 ** 2 * self.Sd ** 2)
             cms = cms * cmb / (cms + cmb)
         zmech = self.Rms + 1j * w * (self.Mms + added_mass) + 1 / (1j * w * cms)
-        return self.Re + self.Kr * w ** self.Xr + 1j * self.Ki * w ** self.Xi + self.Bl ** 2 / zmech
+        ze = self.Re + self.Kr * w ** self.Xr + 1j * self.Ki * w ** self.Xi
+        return ze, self.Bl ** 2 / zmech
+
+    def impedance(self, f: np.ndarray, added_mass: float = 0.0, box_volume: float | None = None) -> np.ndarray:
+        ze, zm = self.parts(f, added_mass, box_volume)
+        return ze + zm
 
 
 @dataclass
@@ -72,6 +89,9 @@ class SimHardware:
     r_cal: float = 1000.0         # tatsächlicher Wert des Kalibrierwiderstands
 
 
+DRIVER_CONNECTIONS = ("driver", "driver_mass", "driver_box", "driver_rub")
+
+
 class SimulatorBackend(AudioBackend):
     name = "Simulator"
     is_simulator = True
@@ -88,11 +108,42 @@ class SimulatorBackend(AudioBackend):
         self.inductor = 1.0e-3
         self.inductor_dcr = 0.35
         self.rng = np.random.default_rng(seed)
+        self.sample = 1                      # Treiber-Exemplar (1 = Nennwerte)
+        self.level_dependent = False
+        self.distortion = False
+        self._stream: dict | None = None
 
     def set_connection(self, kind: str) -> None:
         self.connection = kind
 
-    def dut_impedance(self, f: np.ndarray) -> np.ndarray:
+    # -- Treiber ------------------------------------------------------------
+    def sample_driver(self, sample: int | None = None) -> SimDriver:
+        """Exemplar mit Fertigungsstreuung (reproduzierbar je Nummer)."""
+        sample = self.sample if sample is None else sample
+        d = self.driver
+        if sample <= 1:
+            return d
+        r = np.random.default_rng(7919 * sample).normal(0.0, 1.0, 5)
+        return replace(d, Re=d.Re * (1 + 0.02 * r[0]), fs=d.fs * (1 + 0.05 * r[1]),
+                       Qms=d.Qms * (1 + 0.08 * r[2]), Qes=d.Qes * (1 + 0.05 * r[3]),
+                       Mms=d.Mms * (1 + 0.03 * r[4]))
+
+    def driver_at_level(self, amplitude: float) -> SimDriver:
+        d = self.sample_driver()
+        if not self.level_dependent:
+            return d
+        x = amplitude - REF_LEVEL               # > 0: lauter als der Bezugspegel
+        return replace(d, fs=d.fs * (1 - 0.10 * x), Qms=d.Qms * (1 - 0.25 * x), Qes=d.Qes * (1 + 0.06 * x))
+
+    def _driver_parts(self, f: np.ndarray, drv: SimDriver) -> tuple[np.ndarray, np.ndarray]:
+        c = self.connection
+        if c == "driver_mass":
+            return drv.parts(f, added_mass=self.added_mass)
+        if c == "driver_box":
+            return drv.parts(f, box_volume=self.box_volume)
+        return drv.parts(f)
+
+    def dut_impedance(self, f: np.ndarray, amplitude: float = REF_LEVEL) -> np.ndarray:
         w = 2 * np.pi * np.maximum(f, 1e-3)
         c = self.connection
         if c == "open":
@@ -101,12 +152,9 @@ class SimulatorBackend(AudioBackend):
             return np.zeros(f.shape, complex)
         if c == "cal":
             return np.full(f.shape, self.hw.r_cal + 0j)
-        if c == "driver":
-            return self.driver.impedance(f)
-        if c == "driver_mass":
-            return self.driver.impedance(f, added_mass=self.added_mass)
-        if c == "driver_box":
-            return self.driver.impedance(f, box_volume=self.box_volume)
+        if c in DRIVER_CONNECTIONS:
+            ze, zm = self._driver_parts(f, self.driver_at_level(amplitude))
+            return ze + zm
         if c == "resistor":
             return self.resistor + 1j * w * 0.8e-6
         if c == "capacitor":
@@ -115,10 +163,12 @@ class SimulatorBackend(AudioBackend):
             return self.inductor_dcr + 1j * w * self.inductor
         raise ValueError(c)
 
-    def play_record(self, stimulus: np.ndarray, fs: int, in_channels: int = 2) -> np.ndarray:
+    # -- Messbrücke -----------------------------------------------------------
+    def _simulate(self, stimulus: np.ndarray, fs: int, circular: bool = False) -> np.ndarray:
+        """Spannungen an Referenz- und Messeingang (ohne Rauschen), Länge = len(stimulus)."""
         hw = self.hw
         n = len(stimulus)
-        nfft = 1 << int(np.ceil(np.log2(n + hw.latency + 1024)))
+        nfft = n if circular else 1 << int(np.ceil(np.log2(n + hw.latency + 1024)))
         f = np.fft.rfftfreq(nfft, 1 / fs)
         X = np.fft.rfft(stimulus, nfft)
         jw = 1j * 2 * np.pi * f
@@ -126,20 +176,89 @@ class SimulatorBackend(AudioBackend):
         def hp(fc):
             return jw / (jw + 2 * np.pi * fc)
 
-        z_dut = self.dut_impedance(f)
+        amp = float(np.max(np.abs(stimulus))) if n else 0.0
+        z_dut = self.dut_impedance(f, amp)
         z_term = z_dut + hw.lead_r + jw * hw.lead_l
         z_eff = z_term * hw.r_in / (z_term + hw.r_in)
         divider = z_eff / (hw.r_series + z_eff)
         delay = np.exp(-jw * hw.latency / fs)
         v_src = X * hp(hw.hp_out) * delay
         a = np.fft.irfft(v_src * hw.gain_ref * hp(hw.hp_ref), nfft)[:n]
-        b = np.fft.irfft(v_src * divider * hw.gain_meas * hp(hw.hp_meas), nfft)[:n]
-        noise = 10 ** (hw.noise_dbfs / 20)
-        rec = np.column_stack([a, b]) + noise * self.rng.standard_normal((n, 2))
-        rec = np.round(np.clip(rec, -1, 32767 / 32768) * 32768) / 32768   # 16 Bit wie USB-Audio
+        v_meas = v_src * divider
+        b = np.fft.irfft(v_meas * hw.gain_meas * hp(hw.hp_meas), nfft)[:n]
+        if self.distortion and self.connection in DRIVER_CONNECTIONS:
+            b = b + self._nonlinear(f, v_meas, z_dut, nfft, n) * hw.gain_meas
+        return np.column_stack([a, b])
+
+    def _nonlinear(self, f, v_meas, z_dut, nfft, n) -> np.ndarray:
+        """Verzerrungen aus der Gegen-EMK (∝ Membrangeschwindigkeit): k2/k3 und optional Rub & Buzz."""
+        _ze, zm = self._driver_parts(f, self.driver_at_level(REF_LEVEL))
+        emf = np.fft.irfft(v_meas * zm / np.where(np.abs(z_dut) > 0, z_dut, 1.0), nfft)[:n]
+        out = 0.05 * emf ** 2 + 0.4 * emf ** 3
+        if self.connection == "driver_rub":
+            # „Schleifen“: kurzes Knacken (abklingender 3-kHz-Burst), jedes Mal wenn die Membran-
+            # geschwindigkeit eine Schwelle überschreitet – kaum mehr THD, aber viele hohe Harmonische
+            over = np.abs(emf) > 0.04
+            hits = np.flatnonzero(over[1:] & ~over[:-1]) + 1
+            if len(hits):
+                fs = int(round(2 * f[-1]))
+                t = np.arange(int(0.004 * fs)) / fs
+                burst = np.exp(-t / 0.0006) * np.sin(2 * np.pi * 3000 * t)
+                pulses = np.zeros(n)
+                pulses[hits] = 0.02 * np.sign(emf[hits])
+                out = out + np.convolve(pulses, burst)[:n]
+        return out
+
+    def _finish(self, rec: np.ndarray) -> np.ndarray:
+        noise = 10 ** (self.hw.noise_dbfs / 20)
+        rec = rec + noise * self.rng.standard_normal(rec.shape)
+        return np.round(np.clip(rec, -1, 32767 / 32768) * 32768) / 32768   # 16 Bit wie USB-Audio
+
+    def play_record(self, stimulus: np.ndarray, fs: int, in_channels: int = 2) -> np.ndarray:
+        rec = self._finish(self._simulate(np.asarray(stimulus, float), fs))
         if in_channels == 1:
             return rec[:, 1:2]
         return rec
 
-    def play(self, signal: np.ndarray, fs: int, loop: bool = True) -> None:
-        pass
+    # -- Dauerbetrieb (Generator / Oszilloskop / Pegelanzeige) ------------------
+    def start_stream(self, signal: np.ndarray | None, fs: int, loop: bool = True) -> None:
+        sig = np.zeros(int(0.5 * fs)) if signal is None or len(signal) == 0 else np.asarray(signal, float)
+        if not loop:
+            sig = np.concatenate([sig, np.zeros(int(0.5 * fs))])
+        self._stream = {"sig": sig, "fs": fs, "loop": loop, "t0": time.monotonic(), "key": None, "resp": None}
+
+    def _response(self) -> np.ndarray:
+        st = self._stream
+        key = (self.connection, self.sample, self.level_dependent, self.distortion)
+        if st["key"] != key:
+            st["resp"] = self._simulate(st["sig"], st["fs"], circular=st["loop"])
+            st["key"] = key
+        return st["resp"]
+
+    def read_input(self, n: int) -> np.ndarray | None:
+        st = self._stream
+        if st is None:
+            return None
+        resp = self._response()
+        end = int((time.monotonic() - st["t0"]) * st["fs"])
+        idx = np.arange(end - n, end)
+        N = len(resp)
+        if st["loop"]:
+            out = resp[idx % N]
+        else:
+            out = np.zeros((n, 2))
+            ok = (idx >= 0) & (idx < N)
+            out[ok] = resp[idx[ok]]
+        out[idx < 0] = 0.0
+        return self._finish(out).astype(np.float32)
+
+    @property
+    def streaming(self) -> bool:
+        return self._stream is not None
+
+    @property
+    def stream_fs(self) -> int | None:
+        return self._stream["fs"] if self._stream else None
+
+    def stop(self) -> None:
+        self._stream = None

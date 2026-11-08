@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .analysis.quality import compute_quality
 from .audio.backend import AudioBackend
 from .dsp.calibration import Calibration, nominal_impedance
 from .dsp.sweep import SweepConfig, make_stimulus
@@ -43,6 +44,7 @@ class RawResult:
     peak_meas: float
     latency: int | None = None
     recordings: np.ndarray | None = None      # (Mittelungen, Samples, Kanäle), float32
+    quality: dict | None = None               # Kennzahlen für die Qualitäts-Ampel (analysis.quality)
 
     @property
     def clipped(self) -> bool:
@@ -98,8 +100,21 @@ def transfer_from_recordings(recordings: np.ndarray, cfg: SweepConfig, ch: Chann
         peak_ref = max(peak_ref, float(np.max(np.abs(ref))))
         peak_meas = max(peak_meas, float(np.max(np.abs(meas))))
         acc.add(ref, meas)
-    H = acc.transfer()[cfg.band_mask()]
-    return RawResult(cfg.frequencies(), H, peak_ref, peak_meas, latency, recordings)
+    band = cfg.band_mask()
+    H = acc.transfer()[band]
+    quality = None
+    try:
+        lat = latency
+        if lat is None:
+            lat = estimate_delay(stim, np.asarray(recordings[0][:, ch.ref_channel], dtype=float))
+        coh = None
+        if acc.count > 1:
+            f = cfg.frequencies()
+            coh = acc.coherence()[band][(f >= 20) & (f <= 10000)]
+        quality = compute_quality(recordings, stim, cfg, ch, lat, coh)
+    except Exception:       # noqa: BLE001 – Qualitätsbewertung darf eine Messung nie verhindern
+        quality = None
+    return RawResult(cfg.frequencies(), H, peak_ref, peak_meas, latency, recordings, quality)
 
 
 class MeasurementEngine:
@@ -147,6 +162,7 @@ class MeasurementEngine:
             "device": self.backend.describe(),
             "peak_ref": raw.peak_ref,
             "peak_meas": raw.peak_meas,
+            "quality": raw.quality,
         }
         m = Measurement(name=name, f=raw.f, Z=Z, meta=meta, raw_H=raw.H, recordings=raw.recordings)
         return m, raw

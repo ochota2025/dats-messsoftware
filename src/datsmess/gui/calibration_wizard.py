@@ -4,7 +4,9 @@ from __future__ import annotations
 import numpy as np
 from PySide6 import QtCore, QtWidgets
 
+from ..analysis.quality import grade
 from ..dsp.calibration import Calibration
+from .appearance import appearance
 from .state import AppState
 
 STEPS = {
@@ -97,10 +99,18 @@ class StepPage(QtWidgets.QWizardPage):
         self.wiz.R[self.kind] = raw.recordings
         msg = [f"✔ gemessen – Spitzenpegel Referenz {20 * np.log10(raw.peak_ref + 1e-12):.1f} dBFS, "
                f"Messkanal {20 * np.log10(raw.peak_meas + 1e-12):.1f} dBFS"]
-        if raw.clipped:
-            msg.append("<span style='color:#e04848'>Übersteuerung! Pegel reduzieren und wiederholen.</span>")
-        if self.kind != "short" and raw.peak_meas < 1e-3:
-            msg.append("<span style='color:#e04848'>Kaum Signal am Messkanal – Verbindung prüfen.</span>")
+        a = appearance().current
+        if raw.quality is not None:
+            g, hints = grade(raw.quality, self.kind)
+            for h in hints:
+                msg.append(f"<span style='color:{a.err if g == 'bad' else a.warn}'>{h}</span>")
+            if g == "ok":
+                msg.append(f"<span style='color:{a.ok}'>Signalqualität gut.</span>")
+        else:
+            if raw.clipped:
+                msg.append(f"<span style='color:{a.err}'>Übersteuerung! Pegel reduzieren und wiederholen.</span>")
+            if self.kind != "short" and raw.peak_meas < 1e-3:
+                msg.append(f"<span style='color:{a.err}'>Kaum Signal am Messkanal – Verbindung prüfen.</span>")
         self.result.setText("<br>".join(msg))
         self.completeChanged.emit()
 
@@ -147,13 +157,13 @@ class ResultPage(QtWidgets.QWizardPage):
         if lr is not None:
             lines.append(f"<b>Kabel-/Übergangswiderstand:</b> {lr * 1000:.1f} mΩ")
             if lr > 0.5:
-                lines.append("<span style='color:#d9822b'>Ungewöhnlich hoher Leitungswiderstand – "
+                lines.append(f"<span style='color:{appearance().current.warn}'>Ungewöhnlich hoher Leitungswiderstand – "
                              "Klemmen beim Kurzschluss prüfen.</span>")
         band = (f > 20) & (f < 10000)
         spread = np.ptp(np.abs(cal.r_s[band])) / np.median(np.abs(cal.r_s[band]))
         lines.append(f"<b>Schwankung Referenzwiderstand 20 Hz–10 kHz:</b> {spread * 100:.2f} %")
         if spread > 0.05:
-            lines.append("<span style='color:#d9822b'>Starke Frequenzabhängigkeit – Kanalzuordnung "
+            lines.append(f"<span style='color:{appearance().current.warn}'>Starke Frequenzabhängigkeit – Kanalzuordnung "
                          "oder Verbindungen prüfen.</span>")
         lines.append("<br>Mit <b>Fertigstellen</b> wird die Kalibrierung übernommen und gespeichert.")
         self.text.setText("<br>".join(lines))

@@ -11,6 +11,7 @@ class CrossSpectrum:
         self.nfft = nfft
         self.sxy = None
         self.sxx = None
+        self.syy = None
         self.count = 0
 
     def add(self, ref: np.ndarray, meas: np.ndarray) -> None:
@@ -18,16 +19,23 @@ class CrossSpectrum:
         Y = np.fft.rfft(meas, self.nfft)
         sxy = Y * np.conj(X)
         sxx = (X * np.conj(X)).real
+        syy = (Y * np.conj(Y)).real
         if self.sxy is None:
-            self.sxy, self.sxx = sxy, sxx
+            self.sxy, self.sxx, self.syy = sxy, sxx, syy
         else:
             self.sxy = self.sxy + sxy
             self.sxx = self.sxx + sxx
+            self.syy = self.syy + syy
         self.count += 1
 
     def transfer(self) -> np.ndarray:
         reg = 1e-14 * float(np.max(self.sxx))
         return self.sxy / (self.sxx + reg)
+
+    def coherence(self) -> np.ndarray:
+        """Betragsquadrat-Kohärenz (nur bei ≥ 2 Mittelungen aussagekräftig)."""
+        den = self.sxx * self.syy
+        return np.abs(self.sxy) ** 2 / np.where(den > 0, den, np.inf)
 
 
 def estimate_delay(ref: np.ndarray, rec: np.ndarray) -> int:

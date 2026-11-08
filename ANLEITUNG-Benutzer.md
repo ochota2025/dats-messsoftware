@@ -40,7 +40,12 @@ Fenster zeigt den Fortschritt. **Nicht hineinklicken!** Unter Windows hält ein 
 an (oben steht dann „Auswählen“; mit **Esc** geht es weiter). Am Ende schließt sich das Fenster,
 und das Programm öffnet sich. Beim allerersten Mal kann das bis zu einer Minute dauern.
 
-Danach startet das Programm bei jedem Doppelklick sofort.
+Danach startet das Programm bei jedem Doppelklick sofort. Unter Windows liegt nach dem ersten
+Start außerdem eine Verknüpfung **„DATS-Messsoftware“** auf dem Desktop.
+
+**Probleme melden:** Im Programm *Hilfe → Fehlerbericht … → Kopieren* und den Text in den
+Messenger einfügen. Darin stehen Version, System, Audio-Geräte und das Protokoll – ohne
+persönliche Ordnernamen. Bei einem Programmfehler öffnet sich der Bericht von selbst.
 
 ## 4. Updates holen
 

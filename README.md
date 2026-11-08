@@ -52,9 +52,12 @@ Tests: `.venv/bin/python -m pytest`
 | FS-04 Projektarchiv .datsproj (Rohaufnahmen, Kalibrierungen, T/S, Treiberinfo + Notizen), bitgenau reproduzierbar | ✔ |
 | Datenblatt (A4) mit Kurve und Parametern als PDF oder Ausdruck | ✔ |
 | 8 Speicherplätze mit Tastenkürzeln, Sofort-Kennwerte, Hell/Dunkel | ✔ |
-| FA-01 Pegelabhängige Messreihen | offen |
-| FA-03 Rub & Buzz | offen |
-| OS-01 Oszilloskop | offen |
+| FA-01 Pegelabhängige Messreihen (fs, Q, Re über dem Pegel) | ✔ |
+| FA-03 Rub & Buzz – elektrisch, aus dem Impedanz-Sweep (höhere Harmonische) | ✔ (akustisch nur mit Mikrofon) |
+| OS-01 Oszilloskop (Zeitverlauf mit Trigger, Spektrum, THD+N) | ✔ |
+| Messqualitäts-Ampel, Geräte-Check (Kanalzuordnung, R_ref, R_cal) | ✔ |
+| Paarvergleich, Impedanzkorrektur (Zobel, Saugkreis) | ✔ |
+| Fehlerbericht, Update-Hinweis, automatisches Sichern | ✔ |
 
 ## Messprinzip
 
@@ -117,12 +120,27 @@ deshalb einstellbar und sollten einmal geprüft werden:
 
 ```
 src/datsmess/
-  dsp/        sweep.py, transfer.py, calibration.py, generator.py
-  analysis/   ts.py (T/S, Wright, Vas-Methoden), lcr.py
-  audio/      backend.py (PortAudio), simulator.py (virtuelles DATS)
-  io/         formats.py (zma/frd/txt/csv)
-  gui/        main_window.py, impedance_tab.py, ts_tab.py, lcr_tab.py,
-              generator_tab.py, calibration_wizard.py, plots.py, state.py
+  dsp/        sweep.py, transfer.py, calibration.py, generator.py,
+              distortion.py (Klirr/Rub & Buzz nach Farina)
+  analysis/   ts.py (T/S, Wright, Vas-Methoden), lcr.py, quality.py (Ampel),
+              setup_check.py (Geräte-Check), matching.py (Paarvergleich),
+              correction.py (Zobel, Saugkreis)
+  audio/      backend.py (PortAudio, Dauerbetrieb mit Ringpuffer), simulator.py (virtuelles DATS)
+  io/         formats.py, ts_export.py, watch.py, project.py (.datsproj)
+  gui/        main_window.py + ein Modul je Tab, appearance.py (Design hell/dunkel),
+              device_check.py, calibration_wizard.py, datasheet.py, errors.py (Fehlerbericht),
+              help.py, icon.py (Symbol, Taskleiste, Desktop-Verknüpfung), plots.py, state.py
+  resources/  Programmsymbol (PNG/ICO) und Stylesheet-Symbole – erzeugt mit tools/make_icon.py
+  diagnostics.py   Protokoll und Fehlerbericht
+  updates.py       Versionsvergleich mit GitHub, NEUERUNGEN.md
   measurement.py   Mess-Engine (ohne GUI nutzbar)
 tests/        End-to-End-Tests gegen den Simulator
 ```
+
+### Klirr und Rub & Buzz
+
+Beim exponentiellen Sweep liegen die Impulsantworten der Oberwellen nach der Entfaltung zeitlich
+vor der linearen Antwort (Abstand `L·ln k`). `dsp/distortion.py` schneidet sie aus, rechnet den
+Anteil heraus, der schon im Referenzkanal steckt (Wandler/Verstärker), und zieht die Rauschleistung
+ab, die aus der Stille nach dem Sweep geschätzt wird. Ausgewertet wird die Klemmenspannung –
+Rub & Buzz zeigt sich an den Harmonischen 10 … 20.

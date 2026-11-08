@@ -7,6 +7,7 @@ daher kein proprietärer Treiber nötig. Der Zugriff erfolgt über PortAudio
 """
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -20,6 +21,7 @@ CONNECTIONS = {
     "driver": "Treiber (Freiluft)",
     "driver_mass": "Treiber + Zusatzmasse",
     "driver_box": "Treiber im Testgehäuse",
+    "driver_rub": "Treiber mit Schleifgeräusch",
     "resistor": "Widerstand",
     "capacitor": "Kondensator",
     "inductor": "Spule",
@@ -38,7 +40,24 @@ class AudioBackend(ABC):
         """
 
     def play(self, signal: np.ndarray, fs: int, loop: bool = True) -> None:
-        """Signalgenerator-Wiedergabe (nicht blockierend)."""
+        """Signalgenerator-Wiedergabe (nicht blockierend) – Eingänge laufen für das Oszilloskop mit."""
+        self.start_stream(signal, fs, loop)
+
+    # -- Dauerbetrieb (Generator, Oszilloskop, Pegelanzeige) -------------------
+    def start_stream(self, signal: np.ndarray | None, fs: int, loop: bool = True) -> None:
+        """Spielt ``signal`` (oder Stille) und nimmt fortlaufend beide Eingänge auf."""
+
+    def read_input(self, n: int) -> np.ndarray | None:
+        """Die letzten ``n`` aufgenommenen Samples (n, 2) – ``None``, wenn kein Strom läuft."""
+        return None
+
+    @property
+    def streaming(self) -> bool:
+        return False
+
+    @property
+    def stream_fs(self) -> int | None:
+        return None
 
     def stop(self) -> None:
         pass
@@ -115,6 +134,7 @@ class SoundDeviceBackend(AudioBackend):
         return min(wanted, int(info["max_input_channels"]))
 
     def play_record(self, stimulus: np.ndarray, fs: int, in_channels: int = 2) -> np.ndarray:
+        self.stop()                 # laufender Generator/Oszilloskop-Strom würde das Gerät blockieren
         n_out = self._out_channels()
         out = np.tile(stimulus.astype(np.float32)[:, None], (1, n_out))
         n_in = self._in_channels(in_channels)
@@ -125,10 +145,94 @@ class SoundDeviceBackend(AudioBackend):
             rec = np.hstack([rec, np.zeros((rec.shape[0], in_channels - rec.shape[1]))])
         return rec
 
-    def play(self, signal: np.ndarray, fs: int, loop: bool = True) -> None:
+    # -- Dauerbetrieb ----------------------------------------------------------
+    _stream = None
+
+    def start_stream(self, signal: np.ndarray | None, fs: int, loop: bool = True) -> None:
+        self.stop()
         n_out = self._out_channels()
-        data = np.tile(signal.astype(np.float32)[:, None], (1, n_out))
-        self._sd.play(data, samplerate=fs, device=self.output_device, loop=loop)
+        n_in = self._in_channels(2)
+        sig = np.zeros(1, np.float32) if signal is None else np.asarray(signal, np.float32)
+        ring = RingBuffer(int(fs * 2), 2)
+        pos = [0]
+
+        def callback(indata, outdata, frames, _time, _status):
+            ring.write(indata[:, :n_in])
+            i = pos[0]
+            if signal is None:
+                out = np.zeros(frames, np.float32)
+            elif loop:
+                idx = (np.arange(frames) + i) % len(sig)
+                out = sig[idx]
+            else:
+                out = np.zeros(frames, np.float32)
+                k = max(0, min(frames, len(sig) - i))
+                out[:k] = sig[i:i + k]
+            pos[0] = i + frames
+            outdata[:] = out[:, None]
+
+        st = self._sd.Stream(samplerate=fs, device=(self.input_device, self.output_device),
+                             channels=(n_in, n_out), dtype="float32", callback=callback)
+        st.start()
+        self._stream, self._ring, self._fs = st, ring, fs
+
+    def read_input(self, n: int) -> np.ndarray | None:
+        if self._stream is None:
+            return None
+        return self._ring.read(n)
+
+    @property
+    def streaming(self) -> bool:
+        return self._stream is not None
+
+    @property
+    def stream_fs(self) -> int | None:
+        return self._fs if self._stream is not None else None
 
     def stop(self) -> None:
+        st, self._stream = self._stream, None
+        if st is not None:
+            try:
+                st.stop()
+                st.close()
+            except Exception:       # noqa: BLE001
+                pass
         self._sd.stop()
+
+
+class RingBuffer:
+    """Thread-sicherer Ringpuffer für Eingangssamples (Audio-Callback schreibt, GUI liest)."""
+
+    def __init__(self, size: int, channels: int):
+        self.buf = np.zeros((size, channels), np.float32)
+        self.pos = 0
+        self.filled = 0
+        self.lock = threading.Lock()
+
+    def write(self, block: np.ndarray) -> None:
+        block = np.asarray(block, np.float32)
+        n, size = len(block), len(self.buf)
+        if n == 0:
+            return
+        with self.lock:
+            if n >= size:
+                block, n = block[-size:], size
+            c = block.shape[1]
+            end = self.pos + n
+            if end <= size:
+                self.buf[self.pos:end, :c] = block
+            else:
+                k = size - self.pos
+                self.buf[self.pos:, :c] = block[:k]
+                self.buf[:n - k, :c] = block[k:]
+            self.pos = end % size
+            self.filled = min(size, self.filled + n)
+
+    def read(self, n: int) -> np.ndarray:
+        with self.lock:
+            n = min(n, len(self.buf))
+            idx = (np.arange(self.pos - n, self.pos)) % len(self.buf)
+            out = self.buf[idx].copy()
+            if self.filled < n:
+                out[: n - self.filled] = 0.0
+            return out

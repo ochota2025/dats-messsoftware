@@ -69,9 +69,11 @@ class SlotBar(QtWidgets.QWidget):
             style = "solid" if m else "dotted"
             text = "palette(button-text)" if m else "palette(placeholder-text)"
             b.setStyleSheet(
-                f"QToolButton {{ color: {text}; border: 1px solid palette(mid); border-bottom: 4px {style} {color};"
-                f" border-radius: 3px; padding: 3px 6px; }}"
-                f"QToolButton:checked {{ background: palette(alternate-base); font-weight: bold; }}")
+                f"QToolButton {{ color: {text}; background: palette(base); border: 1px solid palette(mid);"
+                f" border-bottom: 3px {style} {color}; border-radius: 7px; padding: 3px 7px; }}"
+                f"QToolButton:hover {{ border-color: {color}; }}"
+                f"QToolButton:checked {{ background: palette(alternate-base); font-weight: bold;"
+                f" border-color: {color}; }}")
             if m:
                 tip = (f"Platz {i + 1}: {m.name}\nKlick: ein-/ausblenden ({ALT}{i + 1})\n"
                        f"Rechtsklick: weitere Aktionen")

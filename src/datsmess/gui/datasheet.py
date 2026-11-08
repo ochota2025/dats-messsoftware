@@ -61,6 +61,7 @@ class SheetData:
     conditions: list[tuple[str, str]] = field(default_factory=list)
     notes: str = ""
     message: str = ""          # z. B. „keine Treiberresonanz erkannt“
+    comment: str = ""          # Kommentar aus dem Datenblatt-Dialog (je Messung gespeichert)
 
 
 # --------------------------------------------------------------------------
@@ -84,7 +85,7 @@ def _groups(ts: TSParameters, spec) -> list:
 
 def build_sheet(m: Measurement, *, title: str, info, ts: TSParameters | None = None,
                 second: Measurement | None = None, ts_inputs: dict | None = None,
-                show_model: bool = True, show_second: bool = True) -> SheetData:
+                show_model: bool = True, show_second: bool = True, comment: str = "") -> SheetData:
     """``ts`` = vollständiges Ergebnis aus dem T/S-Tab (zu ``m``); sonst nur Kennwerte aus ``m``."""
     curves = []
     f, Z = m.resampled(1500, 48)
@@ -107,7 +108,7 @@ def build_sheet(m: Measurement, *, title: str, info, ts: TSParameters | None = N
     parts = [p for p in (f"S/N {info.serial}" if info.serial else "", f"Messung „{m.name}“",
                          m.created.replace("T", " ")[:16]) if p]
     data = SheetData(title=title or "Treiber-Datenblatt", subtitle="  ·  ".join(parts), curves=curves,
-                     notes=info.notes.strip(), message=message)
+                     notes=info.notes.strip(), message=message, comment=comment.strip())
     if ts is not None:
         data.left = _groups(ts, GROUPS_LEFT)
         data.right = _groups(ts, GROUPS_RIGHT)
@@ -317,8 +318,27 @@ def paint_sheet(painter: QtGui.QPainter, page: QtCore.QRectF, data: SheetData, d
             y += lh
         y += 2.5 * mm
 
-    # Notizen
     footer_h = 7 * mm
+
+    # Kommentar (aus dem Datenblatt-Dialog)
+    if data.comment and y < bottom - footer_h - 10 * mm:
+        painter.setFont(_font(dpi, 9.5, True))
+        painter.setPen(accent)
+        fmh = painter.fontMetrics()
+        painter.drawText(QtCore.QPointF(x0, y + fmh.ascent()), "Kommentar")
+        y += fmh.height() + 0.8 * mm
+        painter.setFont(_font(dpi, 9))
+        flags = QtCore.Qt.TextWordWrap | QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft
+        avail = bottom - footer_h - y - 2 * mm
+        need = painter.boundingRect(QtCore.QRectF(0, 0, w - 5 * mm, avail), flags, data.comment).height()
+        box = QtCore.QRectF(x0, y, w, min(avail, need + 3.5 * mm))
+        painter.fillRect(box, QtGui.QColor("#fff8e6"))
+        painter.fillRect(QtCore.QRectF(x0, y, 0.8 * mm, box.height()), QtGui.QColor("#e0a020"))
+        painter.setPen(ink)
+        painter.drawText(box.adjusted(3 * mm, 1.5 * mm, -2 * mm, -1.5 * mm), flags, data.comment)
+        y += box.height() + 3 * mm
+
+    # Notizen
     if data.notes and y < bottom - footer_h - 10 * mm:
         painter.setFont(_font(dpi, 9.5, True))
         painter.setPen(accent)
@@ -415,8 +435,14 @@ class DatasheetDialog(QtWidgets.QDialog):
         self.scope = QtWidgets.QLabel()
         self.scope.setWordWrap(True)
         self.scope.setStyleSheet("color: palette(placeholder-text);")
+        self.comment = QtWidgets.QPlainTextEdit()
+        self.comment.setPlaceholderText("z. B. Prüfergebnis, Einbausituation, Auffälligkeiten – erscheint "
+                                        "auf dem Datenblatt und wird mit der Messung gespeichert")
+        self.comment.setFixedHeight(self.comment.fontMetrics().lineSpacing() * 4 + 14)
+        self.comment.setTabChangesFocus(True)
         form.addRow("Messung:", self.meas)
         form.addRow("Titel:", self.title)
+        form.addRow("Kommentar:", self.comment)
         form.addRow(self.show_model)
         form.addRow(self.show_second)
         form.addRow(self.scope)
@@ -442,8 +468,12 @@ class DatasheetDialog(QtWidgets.QDialog):
         lay.addWidget(scroll, 1)
         lay.addLayout(btns)
 
+        self._comment_for = None
+        self._load_comment()
+        self.meas.currentIndexChanged.connect(self._load_comment)
         self.meas.currentIndexChanged.connect(self.update_preview)
         self.title.textChanged.connect(self._debounce)
+        self.comment.textChanged.connect(self._comment_changed)
         self.show_model.toggled.connect(self.update_preview)
         self.show_second.toggled.connect(self.update_preview)
         btn_pdf.clicked.connect(self._pdf)
@@ -455,6 +485,25 @@ class DatasheetDialog(QtWidgets.QDialog):
 
     def _debounce(self):
         self._timer.start()
+
+    def _load_comment(self, *_):
+        m = self.meas.currentData()
+        self._comment_for = None
+        self.comment.setPlainText(m.meta.get("sheet_comment", "") if m is not None else "")
+        self.comment.setEnabled(m is not None)
+        self._comment_for = m
+
+    def _comment_changed(self):
+        m = self._comment_for
+        if m is None:
+            return
+        text = self.comment.toPlainText()
+        if text.strip():
+            m.meta["sheet_comment"] = text
+        else:
+            m.meta.pop("sheet_comment", None)
+        self.state.mark_dirty()
+        self._debounce()
 
     def data(self) -> SheetData | None:
         m = self.meas.currentData()
@@ -472,7 +521,8 @@ class DatasheetDialog(QtWidgets.QDialog):
         inputs = (self.state.ts_state or {}).get("inputs") if full else None
         return build_sheet(m, title=self.title.text().strip() or m.name, info=self.state.info,
                            ts=res if full else None, second=second, ts_inputs=inputs,
-                           show_model=self.show_model.isChecked(), show_second=self.show_second.isChecked())
+                           show_model=self.show_model.isChecked(), show_second=self.show_second.isChecked(),
+                           comment=self.comment.toPlainText())
 
     def update_preview(self, *_):
         d = self.data()
