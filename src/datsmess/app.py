@@ -10,8 +10,18 @@ def main() -> int:
 
     from .gui.icon import app_icon, set_windows_app_id
 
+    argv = list(sys.argv)
+    if "--wait-pid" in argv:            # Neustart nach dem Selbst-Update: alten Prozess abwarten
+        i = argv.index("--wait-pid")
+        try:
+            pid = int(argv[i + 1])
+        except (IndexError, ValueError):
+            pid = 0
+        del argv[i:i + 2]
+        from .selfupdate import wait_for_pid
+        wait_for_pid(pid)
     set_windows_app_id()                # eigenes Symbol in der Windows-Taskleiste statt Python
-    app = QtWidgets.QApplication(sys.argv)
+    app = QtWidgets.QApplication(argv)
     app.setApplicationName("DATS-Messsoftware")
     app.setOrganizationName("datsmess")
     app.setWindowIcon(app_icon())

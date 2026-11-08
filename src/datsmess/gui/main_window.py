@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .. import __version__, diagnostics, updates
+from .. import __version__, diagnostics, selfupdate, updates
 from ..audio.backend import (CONNECTIONS, SoundDeviceBackend, device_choices, list_devices, physical_name,
                              rescan_devices)
 from ..audio.simulator import SimulatorBackend
@@ -36,6 +36,7 @@ from .lcr_tab import LCRTab
 from .level_tab import LevelTab
 from .state import N_SLOTS, AppState
 from .ts_tab import TSTab
+from .update_dialog import UpdateDialog
 
 log = logging.getLogger("datsmess")
 
@@ -705,8 +706,8 @@ class MainWindow(QtWidgets.QMainWindow):
         box.setWindowTitle("Neue Version verfügbar")
         box.setTextFormat(QtCore.Qt.RichText)
         box.setText(f"<b>Version {info.version}</b> ist verfügbar (installiert: {__version__}).<br><br>"
-                    "<b>Jetzt aktualisieren</b> schließt das Programm, holt die neue Version und startet "
-                    f"sie wieder. Alternativ: Programm schließen und <b>{upd}</b> doppelklicken.")
+                    "<b>Jetzt aktualisieren</b> holt die neue Version und startet das Programm neu – "
+                    f"dauert meist nur Sekunden. Alternativ: Programm schließen und <b>{upd}</b> doppelklicken.")
         if info.changes:
             box.setDetailedText(info.changes)
         b_now = box.addButton("Jetzt aktualisieren", QtWidgets.QMessageBox.AcceptRole)
@@ -716,21 +717,37 @@ class MainWindow(QtWidgets.QMainWindow):
         box.setDefaultButton(b_now)
         box.exec()
         if box.clickedButton() is b_now:
-            self.update_now()
+            self.update_now(info.version)
         elif box.clickedButton() is b_skip:
             self.settings.setValue("update_skip", info.version)
         elif box.clickedButton() is b_folder:
             QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(updates.PROJECT_ROOT)))
 
-    def update_now(self):
-        """Update-Skript starten und das Programm schließen; das Skript startet es danach neu."""
+    def update_now(self, version: str = ""):
+        """Selbst-Update mit kleinem Fortschrittsfenster (keine Konsolenfenster), danach Neustart.
+        Ohne normale Installation (kein Programmordner) bleibt das Update-Skript als Weg."""
         if not self._confirm_discard():
             return
-        err = updates.launch_updater()
-        if err:
-            errors.show_error(self, "Jetzt aktualisieren", f"Das Update konnte nicht gestartet werden:\n{err}")
+        if not selfupdate.can_self_update():
+            err = updates.launch_updater()
+            if err:
+                errors.show_error(self, "Jetzt aktualisieren", f"Das Update konnte nicht gestartet werden:\n{err}")
+                return
+            self.state.dirty = False
+            self.close()
             return
-        log.info("Update gestartet – Programm wird beendet")
+        self.state.stop_audio()
+        dlg = UpdateDialog(self, version)
+        if dlg.exec() != QtWidgets.QDialog.Accepted or dlg.result_info is None:
+            return                              # fehlgeschlagen: alte Version läuft weiter
+        try:
+            selfupdate.restart()
+        except Exception as e:                  # noqa: BLE001
+            log.exception("Neustart nach Update")
+            QtWidgets.QMessageBox.information(self, "Aktualisieren", "Die neue Version ist eingespielt. Bitte das "
+                                              f"Programm schließen und neu starten.\n\n({e})")
+            return
+        log.info("Update eingespielt – Programm startet neu")
         self.state.dirty = False                # schon gefragt – nicht noch einmal beim Schließen
         self.close()
 

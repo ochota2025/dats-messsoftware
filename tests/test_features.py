@@ -390,3 +390,80 @@ def test_latest_commit_rejects_non_github():
     assert updates.latest_commit("https://example.org/x/y") is None
     assert updates.raw_url("https://github.com/a/b", "f.py", "0123abc") == \
         "https://raw.githubusercontent.com/a/b/0123abc/f.py"
+
+
+# ---- Selbst-Update (ohne Konsolenfenster) ------------------------------------------------
+
+def _fake_install(root, version="0.2.8", deps='["numpy"]'):
+    (root / "src" / "datsmess").mkdir(parents=True)
+    (root / "src" / "datsmess" / "__init__.py").write_text(f'__version__ = "{version}"\n')
+    (root / "pyproject.toml").write_text(f'[project]\nname = "datsmess"\nversion = "{version}"\n'
+                                         f'dependencies = {deps}\n')
+    (root / "update-quelle.txt").write_text("https://github.com/a/b\n")
+    (root / ".venv").mkdir()
+    return root
+
+
+def _zip_of(folder):
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for p in folder.rglob("*"):
+            if p.is_file():
+                z.write(p, f"dats-messsoftware-abc/{p.relative_to(folder)}")
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("new_deps,expect_pip", [('["numpy"]', False), ('["numpy", "scipy"]', True)])
+def test_self_update_replaces_files(tmp_path, monkeypatch, new_deps, expect_pip):
+    from datsmess import selfupdate
+    root = _fake_install(tmp_path / "inst")
+    new = _fake_install(tmp_path / "neu", version="0.2.9", deps=new_deps)
+    (new / "NEUERUNGEN.md").write_text("## 0.2.9\n")
+    calls = []
+    monkeypatch.setattr(selfupdate, "reinstall", lambda r: calls.append(r))
+    steps = []
+    res = selfupdate.run_update(root, progress=lambda *a: steps.append(a[0]), fetch=lambda: _zip_of(new))
+    assert res.version == "0.2.9" and res.reinstalled == expect_pip and bool(calls) == expect_pip
+    assert '0.2.9' in (root / "src" / "datsmess" / "__init__.py").read_text()
+    assert (root / "NEUERUNGEN.md").exists() and (root / ".venv" / "datsmess-editable.flag").exists()
+    assert not list(root.rglob("*.neu"))
+    assert steps[0] == "download" and "copy" in steps
+
+
+def test_self_update_rejects_bad_archives(tmp_path):
+    from datsmess import selfupdate
+    root = _fake_install(tmp_path / "inst")
+    with pytest.raises(selfupdate.UpdateError, match="keine gültige ZIP"):
+        selfupdate.run_update(root, fetch=lambda: b"kein zip")
+    other = tmp_path / "anderes"
+    other.mkdir()
+    (other / "README.md").write_text("x")
+    with pytest.raises(selfupdate.UpdateError, match="nicht die DATS"):
+        selfupdate.run_update(root, fetch=lambda: _zip_of(other))
+    assert '0.2.8' in (root / "src" / "datsmess" / "__init__.py").read_text()     # unverändert
+
+
+def test_deps_fingerprint_ignores_version():
+    from datsmess.selfupdate import _deps_fingerprint
+    a = '[project]\nname = "x"\nversion = "0.2.8"\ndependencies = ["numpy"]\n'
+    assert _deps_fingerprint(a) == _deps_fingerprint(a.replace("0.2.8", "0.2.9"))
+    assert _deps_fingerprint(a) != _deps_fingerprint(a.replace('["numpy"]', '["numpy", "scipy"]'))
+
+
+def test_wait_for_pid_returns_after_exit():
+    """Wie beim Neustart: der abgewartete Prozess ist kein Kindprozess (sonst bliebe er als Zombie)."""
+    import subprocess
+    import sys
+    import time
+    from datsmess.selfupdate import wait_for_pid
+    if sys.platform == "win32":
+        p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
+        pid = p.pid
+    else:
+        out = subprocess.run(["sh", "-c", "sleep 0.5 & echo $!"], capture_output=True, text=True)
+        pid = int(out.stdout.strip())
+    t = time.monotonic()
+    wait_for_pid(pid, timeout=10)
+    assert time.monotonic() - t < 5

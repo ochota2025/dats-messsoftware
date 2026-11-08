@@ -1,5 +1,14 @@
 # Neuerungen
 
+## 0.2.9 – 08.11.2026
+
+- **Aktualisieren ohne schwarze Fenster:** „Jetzt aktualisieren“ zeigt ein kleines Fenster mit
+  Fortschrittsbalken, spielt die neue Version ein und startet das Programm neu. Die Bibliotheken
+  werden nur noch neu eingerichtet, wenn sich ihre Liste tatsächlich geändert hat, dann unsichtbar
+  im Hintergrund. Klappt etwas nicht, läuft die bisherige Version einfach weiter.
+  *Gilt ab dem nächsten Update* – dieses hier läuft noch über den alten Weg.
+- Die Update-Dateien im Programmordner bleiben als Notlösung erhalten.
+
 ## 0.2.8 – 08.11.2026
 
 - **Behoben:** „Nach Updates suchen“ meldete direkt nach einer Veröffentlichung bis zu 5 Minuten

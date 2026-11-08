@@ -27,7 +27,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 86 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 91 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -74,7 +74,10 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Unter Windows läuft `pythonw` ohne Konsole: Fehler gehen ins Protokoll (`datsmess.log` im
   App-Datenordner) und in den Fehlerdialog; `print` ist dort unsichtbar.
 - **Szene in PDF rendern** skaliert Schriften doppelt → im Datenblatt über ein Zwischenbild (96 dpi, ×3).
-- Update-Ablauf: `tools/update.ps1` (bzw. `Update-Mac.command`) wartet, bis das Programm geschlossen
+- Selbst-Update (Standard seit 0.2.9): `selfupdate.py` + `gui/update_dialog.py` – laden (Commit-SHA),
+  Dateien atomar ersetzen, `pip install -e .` nur wenn sich Abhängigkeiten in pyproject.toml ändern
+  (Versionsnummer zählt nicht), Neustart mit `--wait-pid`. Keine Konsolenfenster.
+- Update-Ablauf (Notlösung): `tools/update.ps1` (bzw. `Update-Mac.command`) wartet, bis das Programm geschlossen
   ist, aktualisiert und startet es nur bei Erfolg neu; `-FromApp` (Knopf „Jetzt aktualisieren“,
   `updates.launch_updater`) startet auch nach einem Fehler die alte Version wieder. Änderungen an
   den Update-Skripten wirken erst beim *übernächsten* Update – das nächste läuft mit dem alten Skript.
