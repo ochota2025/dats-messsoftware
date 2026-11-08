@@ -10,6 +10,7 @@ import json
 from ..io.formats import FORMATS, TextExportOptions, export_impedance, import_impedance
 from ..measurement import Measurement, reprocess
 from .de import get_item, get_text
+from .slots import SlotBar
 from .dialogs import ExportDialog
 from .plots import SMOOTHING, VIEWS, Curve, ImpedancePlot, display_data
 from .state import AppState
@@ -28,6 +29,11 @@ class ImpedanceTab(QtWidgets.QWidget):
         self.smoothing = QtWidgets.QComboBox()
         self.smoothing.addItems(list(SMOOTHING))
         self.log_y = QtWidgets.QCheckBox("|Z| logarithmisch")
+        self.auto_hide = QtWidgets.QCheckBox("Ältere ausblenden")
+        self.auto_hide.setToolTip("Bei einer neuen Messung alle Messungen ausblenden, "
+                                  "die auf keinem Speicherplatz liegen")
+        self.auto_hide.setChecked(state.auto_hide)
+        self.auto_hide.toggled.connect(lambda on: setattr(state, "auto_hide", on))
         btn_fit = QtWidgets.QPushButton("Ansicht anpassen")
         bar.addWidget(QtWidgets.QLabel("Ansicht:"))
         bar.addWidget(self.view)
@@ -36,6 +42,8 @@ class ImpedanceTab(QtWidgets.QWidget):
         bar.addWidget(self.smoothing)
         bar.addSpacing(12)
         bar.addWidget(self.log_y)
+        bar.addSpacing(12)
+        bar.addWidget(self.auto_hide)
         bar.addStretch(1)
         bar.addWidget(btn_fit)
 
@@ -72,6 +80,8 @@ class ImpedanceTab(QtWidgets.QWidget):
         pl = QtWidgets.QVBoxLayout(pw)
         pl.setContentsMargins(0, 0, 0, 0)
         pl.addLayout(bar)
+        self.slot_bar = SlotBar(state, self.current_measurement)
+        pl.addWidget(self.slot_bar)
         pl.addWidget(self.plot, 1)
         split.addWidget(pw)
         split.addWidget(side)
@@ -176,8 +186,14 @@ class ImpedanceTab(QtWidgets.QWidget):
         if paths:
             self.state.status.emit(f"{len(paths)} Datei(en) importiert.")
 
-    def export_selected(self):
-        sel = self._selected() or ([self.state.measurements[-1]] if self.state.measurements else [])
+    def current_measurement(self) -> Measurement | None:
+        """Für Speicherplätze: genau eine markierte Messung, sonst die neueste."""
+        sel = self._selected()
+        return sel[0] if len(sel) == 1 else self.state.current_measurement()
+
+    def export_selected(self, measurements: list[Measurement] | None = None):
+        sel = measurements or self._selected() or (
+            [self.state.measurements[-1]] if self.state.measurements else [])
         if not sel:
             QtWidgets.QMessageBox.information(self, "Export", "Keine Messung vorhanden.")
             return

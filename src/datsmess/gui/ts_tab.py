@@ -31,6 +31,7 @@ class MeasurementCombo(QtWidgets.QComboBox):
         super().__init__()
         self.state = state
         state.measurementsChanged.connect(self.refresh)
+        state.slotsChanged.connect(self.refresh)
         self.refresh()
 
     def refresh(self):
@@ -39,7 +40,8 @@ class MeasurementCombo(QtWidgets.QComboBox):
         self.clear()
         self.addItem("– keine –", None)
         for m in self.state.measurements:
-            self.addItem(m.name, m)
+            slot = self.state.slot_of(m)
+            self.addItem(f"[{slot + 1}] {m.name}" if slot is not None else m.name, m)
         idx = self.findData(cur) if cur is not None else -1
         self.setCurrentIndex(idx if idx >= 0 else 0)
         self.blockSignals(False)

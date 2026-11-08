@@ -165,6 +165,15 @@ def test_project_is_compact_and_falls_back_losslessly(tmp_path, rig):
     assert np.array_equal(l3.Z, imp.Z) and np.array_equal(l3.f, imp.f)
 
 
+def test_project_slots_roundtrip(tmp_path, rig):
+    _eng, _sim, free, mass, _ts = rig
+    slots = [{"id": free.id, "visible": True}, {"id": mass.id, "visible": False}] + \
+            [{"id": None, "visible": True}] * 6
+    save_project(tmp_path / "s.datsproj", Project(measurements=[free, mass], slots=slots))
+    loaded = load_project(tmp_path / "s.datsproj")
+    assert loaded.slots == slots
+
+
 def test_reprocess_with_new_calibration(rig):
     eng, sim, free, *_ = rig
     z_nominal = reprocess(free, None)

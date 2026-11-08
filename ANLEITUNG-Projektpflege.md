@@ -42,8 +42,9 @@ darunter die README.
 Link zur Projektseite schicken und auf `ANLEITUNG-Benutzer.md` hinweisen (auf GitHub
 anklicken, dann wird sie schön dargestellt). Ab dann keine ZIPs mehr per Messenger.
 
-Wer die Software schon per ZIP installiert hat, löscht den alten Ordner und installiert einmal
-neu von GitHub (Anleitung, Schritt 2). Die alte ZIP-Version kennt die Update-Dateien noch nicht.
+Wer die Software schon per ZIP installiert hat, kopiert den Inhalt der GitHub-ZIP einmal über
+den bisherigen Ordner (Dateien ersetzen) – die Bibliotheken in `.venv` bleiben erhalten. Danach
+funktionieren die Update-Dateien.
 
 ---
 

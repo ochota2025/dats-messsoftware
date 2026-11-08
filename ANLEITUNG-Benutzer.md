@@ -20,9 +20,11 @@ Für Windows und Mac. Du brauchst keine Programmierkenntnisse, kein Git und kein
 3. Die ZIP-Datei entpacken, z. B. in „Dokumente“. Es entsteht ein Ordner
    `dats-messsoftware-main`. Den kannst du umbenennen, wie du willst.
 
-> Hattest du die Software schon per WhatsApp-ZIP installiert? Dann den alten Ordner einfach
-> löschen und hier neu anfangen. Das geht schneller als beim ersten Mal, weil die Bibliotheken
-> schon auf dem Rechner zwischengespeichert sind.
+> **Schon eine ältere Version per ZIP installiert?** Den alten Ordner *nicht* löschen – darin
+> liegen die bereits heruntergeladenen Bibliotheken (Unterordner `.venv`). Stattdessen alles aus
+> dem Ordner `dats-messsoftware-main` der neuen ZIP markieren und in den bisherigen
+> Programmordner kopieren („Dateien ersetzen“). Beim nächsten Start steht kurz „Neue Version
+> wird eingerichtet“, danach funktionieren auch die Update-Dateien.
 
 ## 3. Starten
 
@@ -62,7 +64,29 @@ Ohne angeschlossenes DATS läuft ein eingebauter Simulator mit einem virtuellen 
 3. Tab **T/S-Parameter** → *Messen* (Freiluft), *Messen* (Zusatzmasse), **Parameter berechnen**.
 4. Tab **Bauteile (LCR)** → Typ „Kondensator“ → *Bauteil messen*.
 
-## 6. Mit echtem DATS V3
+## 6. Speicherplätze, Darstellung, Tastenkürzel
+
+Über dem Diagramm liegen **8 Speicherplätze**. Jeder Platz hat eine feste Farbe.
+
+| Aktion | Windows | Mac |
+|---|---|---|
+| Aktuelle Messung auf Platz 1 … 8 ablegen | **Strg+1 … 8** | **⌘1 … 8** |
+| Platz 1 … 8 ein-/ausblenden | **Alt+1 … 8** | **⌥1 … 8** |
+| Impedanz messen | Strg+M | ⌘M |
+| Dunkler Modus an/aus | Strg+Umschalt+D | ⌘⇧D |
+
+- Klick auf einen **leeren** Platz legt die aktuelle Messung dort ab, Klick auf einen
+  **belegten** Platz blendet ihn ein oder aus.
+- „Aktuell“ ist die neueste Messung, oder die eine, die rechts in der Liste markiert ist.
+- **Rechtsklick** auf einen Platz: umbenennen, exportieren, leeren, oder **als A (Freiluft)
+  bzw. B (Zusatzmasse/Testbox) für die T/S-Berechnung** verwenden.
+- Mit „Ältere ausblenden“ (Haken über dem Diagramm) verschwinden bei jeder neuen Messung die
+  Kurven, die auf keinem Platz liegen. So sieht man nur die abgelegten Plätze plus die
+  neueste Messung (grau).
+- Die Plätze werden im Projekt (*Datei → Projekt speichern*) mitgespeichert.
+- **Ansicht → Darstellung …**: hell/dunkel, Kurvenfarben, Linienstärke, Gitterlinien.
+
+## 7. Mit echtem DATS V3
 
 1. DATS per USB anschließen und das Programm starten.
 2. Oben bei **Gerät** das DATS auswählen (mit ★ markiert). Wird es nicht angezeigt: auf ↻ klicken.
@@ -71,7 +95,7 @@ Ohne angeschlossenes DATS läuft ein eingebauter Simulator mit einem virtuellen 
 4. Die Ergebnisseite des Assistenten fotografieren und schicken. Mit echter Hardware ist die
    Software noch nicht getestet, das Foto hilft beim Prüfen.
 
-## 7. Wenn etwas nicht klappt
+## 8. Wenn etwas nicht klappt
 
 - **„Python wurde nicht gefunden“:** Schritt 1 wiederholen, danach die Startdatei erneut doppelklicken.
 - **Fenster hängt ohne Fortschritt:** einmal **Esc** drücken. Hilft das nicht: Foto schicken.

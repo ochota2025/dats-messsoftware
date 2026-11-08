@@ -52,6 +52,7 @@ class Project:
     active_calibration_id: str | None = None
     ts: dict | None = None            # Eingaben, Messungs-IDs und Ergebnis-Zeilen des T/S-Tabs
     settings: dict = field(default_factory=dict)
+    slots: list | None = None         # Speicherplätze: [{"id": …, "visible": …}, …]
     created: str = field(default_factory=_now)
     modified: str = ""
 
@@ -188,6 +189,7 @@ def save_project(path: str | Path, project: Project) -> None:
         "info": asdict(project.info), "settings": project.settings,
         "active_calibration_id": project.active_calibration_id,
         "calibrations": sorted(project.calibrations), "measurements": meas_meta, "ts": project.ts,
+        "slots": project.slots,
     }
     tmp = path.with_name(f".~{path.name}.tmp")
     try:
@@ -235,5 +237,6 @@ def load_project(path: str | Path) -> Project:
     info = DriverInfo(**{k: v for k, v in manifest.get("info", {}).items() if k in DriverInfo.__dataclass_fields__})
     return Project(info=info, measurements=meas, calibrations=cals,
                    active_calibration_id=manifest.get("active_calibration_id"), ts=manifest.get("ts"),
-                   settings=manifest.get("settings", {}), created=manifest.get("created", ""),
+                   settings=manifest.get("settings", {}), slots=manifest.get("slots"),
+                   created=manifest.get("created", ""),
                    modified=manifest.get("modified", ""))

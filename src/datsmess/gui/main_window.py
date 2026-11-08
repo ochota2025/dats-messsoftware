@@ -20,7 +20,7 @@ from .dialogs import ProjectInfoDialog, WatchFolderDialog
 from .generator_tab import GeneratorTab
 from .impedance_tab import ImpedanceTab
 from .lcr_tab import LCRTab
-from .state import AppState
+from .state import N_SLOTS, AppState
 from .ts_tab import TSTab
 
 SWEEP_LENGTHS = {15: "kurz (≈ 0,7 s)", 16: "mittel (≈ 1,4 s)", 17: "standard (≈ 2,7 s)", 18: "lang (≈ 5,5 s)"}
@@ -62,6 +62,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.connectionChanged.connect(self._sync_connection)
         self.state.projectChanged.connect(self._update_title)
         appearance().changed.connect(self._appearance_changed)
+        self.imp_tab.slot_bar.useForTS.connect(self._slot_for_ts)
+        self.imp_tab.slot_bar.exportSlot.connect(
+            lambda i: self.imp_tab.export_selected([self.state.slot_measurement(i)]))
 
         self._restore_settings()
         self._populate_devices(select_saved=True)
@@ -133,6 +136,20 @@ class MainWindow(QtWidgets.QMainWindow):
         dlg = ProjectInfoDialog(self.state.info, self)
         if dlg.exec() == QtWidgets.QDialog.Accepted:
             self.state.set_info(dlg.info())
+
+    # -- Speicherplätze -------------------------------------------------------
+    def _slot_for_ts(self, i: int, role: str):
+        m = self.state.slot_measurement(i)
+        if m is None:
+            return
+        (self.ts_tab.cb_free if role == "A" else self.ts_tab.cb_second).select(m)
+        label = "A (Freiluft)" if role == "A" else "B (Zweitmessung)"
+        self.state.status.emit(f"Platz {i + 1} „{m.name}“ als {label} für die T/S-Berechnung gewählt.")
+
+    def _clear_slots(self):
+        for i in range(N_SLOTS):
+            if self.state.slots[i] is not None:
+                self.state.clear_slot(i)
 
     # -- Darstellung ----------------------------------------------------------
     def edit_appearance(self):
@@ -302,6 +319,15 @@ class MainWindow(QtWidgets.QMainWindow):
         m_meas = mb.addMenu("&Messung")
         a = m_meas.addAction("Impedanz messen", self.measure)
         a.setShortcut(QtGui.QKeySequence("Ctrl+M"))
+        m_store = m_meas.addMenu("Aktuelle Messung ablegen auf Speicherplatz")
+        m_toggle = m_meas.addMenu("Speicherplatz ein-/ausblenden")
+        for i in range(N_SLOTS):
+            a = m_store.addAction(f"Platz {i + 1}", lambda i=i: self.imp_tab.slot_bar.store(i))
+            a.setShortcut(QtGui.QKeySequence(f"Ctrl+{i + 1}"))
+            a = m_toggle.addAction(f"Platz {i + 1}", lambda i=i: self.state.toggle_slot(i))
+            a.setShortcut(QtGui.QKeySequence(f"Alt+{i + 1}"))
+        m_meas.addAction("Alle Speicherplätze leeren", self._clear_slots)
+        m_meas.addSeparator()
         m_meas.addAction("Kalibrier-Assistent …", self.open_calibration)
         m_meas.addAction("Kalibrierung verwerfen", lambda: self.state.set_calibration(None))
         m_view = mb.addMenu("&Ansicht")

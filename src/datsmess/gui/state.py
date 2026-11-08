@@ -32,6 +32,9 @@ class FnThread(QtCore.QThread):
             self.error.emit(f"{type(e).__name__}: {e}")
 
 
+N_SLOTS = 8
+
+
 def _slug(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", s).strip("_")[:60] or "geraet"
 
@@ -44,6 +47,7 @@ class AppState(QtCore.QObject):
     status = QtCore.Signal(str)
     projectChanged = QtCore.Signal()        # Titel / Dirty-Status / Treiberinfo
     projectLoaded = QtCore.Signal()         # komplettes Projekt ersetzt (T/S-Tab neu befüllen)
+    slotsChanged = QtCore.Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -62,7 +66,70 @@ class AppState(QtCore.QObject):
         self.known_calibrations: dict[str, Calibration] = {}
         self.watch = WatchFolderConfig()
         self.ts_text_provider = None        # Callable[[Measurement], str | None] (T/S-Tab)
+        # Speicherplätze: Messungs-ID je Platz + Sichtbarkeit
+        self.slots: list[str | None] = [None] * N_SLOTS
+        self.slot_visible: list[bool] = [True] * N_SLOTS
+        self.auto_hide = True               # ältere, nicht abgelegte Messungen ausblenden
+        self.measurementsChanged.connect(self._prune_slots)
         self.measurementsChanged.connect(self.mark_dirty)
+
+    # -- Speicherplätze ------------------------------------------------------
+    def _by_id(self, mid: str | None) -> Measurement | None:
+        return next((m for m in self.measurements if m.id == mid), None) if mid else None
+
+    def slot_measurement(self, i: int) -> Measurement | None:
+        return self._by_id(self.slots[i])
+
+    def slot_of(self, m: Measurement) -> int | None:
+        return self.slots.index(m.id) if m.id in self.slots else None
+
+    def slot_color(self, i: int) -> str:
+        cols = appearance().current.colors
+        return cols[i % len(cols)]
+
+    def free_color(self, i: int) -> str:
+        """Farben für nicht abgelegte Messungen: die Palettenfarben hinter den 8 Platzfarben."""
+        cols = appearance().current.colors
+        rest = cols[N_SLOTS:] or cols
+        return rest[i % len(rest)]
+
+    def _prune_slots(self):
+        ids = {m.id for m in self.measurements}
+        if any(s is not None and s not in ids for s in self.slots):
+            self.slots = [s if s in ids else None for s in self.slots]
+            self.slotsChanged.emit()
+
+    def store_in_slot(self, i: int, m: Measurement):
+        """Messung auf Platz i ablegen (feste Farbe des Platzes, sichtbar)."""
+        old = self.slot_of(m)
+        if old is not None:
+            self.slots[old] = None
+        self.slots[i] = m.id
+        self.slot_visible[i] = True
+        m.visible = True
+        m.color = self.slot_color(i)
+        self.slotsChanged.emit()
+        self.measurementsChanged.emit()
+        self.status.emit(f"„{m.name}“ auf Speicherplatz {i + 1} abgelegt.")
+
+    def clear_slot(self, i: int):
+        m = self.slot_measurement(i)
+        self.slots[i] = None
+        if m is not None:
+            m.visible = False
+        self.slotsChanged.emit()
+        self.measurementsChanged.emit()
+
+    def toggle_slot(self, i: int, visible: bool | None = None):
+        m = self.slot_measurement(i)
+        self.slot_visible[i] = (not self.slot_visible[i]) if visible is None else visible
+        if m is not None:
+            m.visible = self.slot_visible[i]
+            self.measurementsChanged.emit()
+        self.slotsChanged.emit()
+
+    def current_measurement(self) -> Measurement | None:
+        return self.measurements[-1] if self.measurements else None
 
     # -- Projekt -------------------------------------------------------------
     def mark_dirty(self, *_):
@@ -76,6 +143,9 @@ class AppState(QtCore.QObject):
 
     def new_project(self):
         self.measurements.clear()
+        self.slots = [None] * N_SLOTS
+        self.slot_visible = [True] * N_SLOTS
+        self.slotsChanged.emit()
         self.info = DriverInfo()
         self.project_path = None
         self.project_created = ""
@@ -89,7 +159,8 @@ class AppState(QtCore.QObject):
 
     def to_project(self, settings: dict) -> projio.Project:
         p = projio.Project(info=self.info, measurements=list(self.measurements), ts=self.ts_state,
-                           settings=settings)
+                           settings=settings,
+                           slots=[{"id": s, "visible": v} for s, v in zip(self.slots, self.slot_visible)])
         if self.project_created:
             p.created = self.project_created
         cal = self.engine.calibration
@@ -114,6 +185,11 @@ class AppState(QtCore.QObject):
     def load_project(self, path: Path) -> projio.Project:
         p = projio.load_project(path)
         self.measurements = list(p.measurements)
+        ids = {m.id for m in self.measurements}
+        slots = (p.slots or [])[:N_SLOTS] + [{}] * max(0, N_SLOTS - len(p.slots or []))
+        self.slots = [d.get("id") if d.get("id") in ids else None for d in slots]
+        self.slot_visible = [bool(d.get("visible", True)) for d in slots]
+        self.slotsChanged.emit()
         self.known_calibrations.update(p.calibrations)
         self.info = p.info
         self.ts_state = p.ts
@@ -194,16 +270,21 @@ class AppState(QtCore.QObject):
 
     def add_measurement(self, m: Measurement):
         if m.color is None:
-            cols = appearance().current.colors
-            m.color = cols[self._color_i % len(cols)]
+            # Farben hinter den 8 Platzfarben weiterzählen, damit es keine Verwechslung gibt
+            m.color = self.free_color(self._color_i)
             self._color_i += 1
+        if self.auto_hide:
+            for o in self.measurements:
+                slot = self.slot_of(o)
+                if slot is None:
+                    o.visible = False
         self.measurements.append(m)
         self.measurementsChanged.emit()
 
     def recolor_measurements(self):
-        cols = appearance().current.colors
         for i, m in enumerate(self.measurements):
-            m.color = cols[i % len(cols)]
+            slot = self.slot_of(m)
+            m.color = self.slot_color(slot) if slot is not None else self.free_color(i)
         self._color_i = len(self.measurements)
         self.measurementsChanged.emit()
 
