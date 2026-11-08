@@ -1,5 +1,13 @@
 # Neuerungen
 
+## 0.2.10 – 08.11.2026
+
+- **Behoben:** Beim Umschalten von „|Z| log“ (und zwischen Betrag/Phase und Real/Imaginär) sprang
+  die Frequenzachse auf den ganzen Bereich zurück, ein eingestellter Zoom ging verloren. Der
+  gewählte Frequenzbereich bleibt jetzt erhalten; „Alles zeigen“ setzt ihn wie gewohnt zurück.
+- Simulator: Der simulierte Klirr ist auf ein realistisches Maß gesenkt. Die Kurve war beim Zoomen
+  um 60–150 Hz leicht wellig. Echte Messungen waren nicht betroffen.
+
 ## 0.2.9 – 08.11.2026
 
 - **Aktualisieren ohne schwarze Fenster:** „Jetzt aktualisieren“ zeigt ein kleines Fenster mit

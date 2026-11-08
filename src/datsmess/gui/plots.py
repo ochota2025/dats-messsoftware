@@ -205,7 +205,14 @@ class ImpedancePlot(QtWidgets.QWidget):
         else:
             self.top.setLabel("left", "Re{Z} [Ω]")
             self.bottom.setLabel("left", "Im{Z} [Ω]")
+        # pyqtgraph schaltet bei setLogMode *alle* Achsen auf Autoskalierung – der vom Nutzer gewählte
+        # Frequenzbereich ginge verloren. Deshalb vorher merken und danach wiederherstellen.
+        x_auto = self.top.vb.autoRangeEnabled()[0]
+        x_range = self.top.vb.viewRange()[0]
         self.top.setLogMode(x=True, y=self.log_y and self.mode == "magphase")
+        if not x_auto:
+            self.top.disableAutoRange(axis="x")
+            self.top.setXRange(*x_range, padding=0)
 
     def set_mode(self, mode: str):
         self.mode = mode

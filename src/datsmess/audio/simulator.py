@@ -194,7 +194,7 @@ class SimulatorBackend(AudioBackend):
         """Verzerrungen aus der Gegen-EMK (∝ Membrangeschwindigkeit): k2/k3 und optional Rub & Buzz."""
         _ze, zm = self._driver_parts(f, self.driver_at_level(REF_LEVEL))
         emf = np.fft.irfft(v_meas * zm / np.where(np.abs(z_dut) > 0, z_dut, 1.0), nfft)[:n]
-        out = 0.05 * emf ** 2 + 0.4 * emf ** 3
+        out = 0.015 * emf ** 2 + 0.12 * emf ** 3       # ~0,1 % Klirr bei −10 dBFS an der Resonanz
         if self.connection == "driver_rub":
             # „Schleifen“: kurzes Knacken (abklingender 3-kHz-Burst), jedes Mal wenn die Membran-
             # geschwindigkeit eine Schwelle überschreitet – kaum mehr THD, aber viele hohe Harmonische
