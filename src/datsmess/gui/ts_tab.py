@@ -9,6 +9,7 @@ from ..analysis.ts import (NEEDS_SECOND_MEASUREMENT, VAS_METHOD_LABELS, VasMetho
 from .. import __version__
 from ..io.formats import export_parameters
 from ..io.ts_export import PROFILES, profile_text, save_text, tsp_text
+from .appearance import appearance
 from .de import ask
 from .plots import Curve, ImpedancePlot
 from .state import AppState
@@ -76,7 +77,7 @@ class TSTab(QtWidgets.QWidget):
         self.sd = _spin(0.1, 20000, 132.0, 1, "cm²")
         fm.addRow("Eff. Membrandurchmesser:", self.diameter)
         fm.addRow("Membranfläche Sd:", self.sd)
-        self.added_mass = _spin(0.1, 2000, 10.0, 2, "g", 0.5)
+        self.added_mass = _spin(0.1, 2000, 20.0, 2, "g", 0.5)
         self.vb = _spin(0.1, 2000, 20.0, 2, "L", 0.5)
         self.mmd = _spin(0.01, 2000, 20.0, 2, "g", 0.5)
         self.spl = _spin(60, 120, 87.0, 1, "dB", 0.5)
@@ -158,7 +159,7 @@ class TSTab(QtWidgets.QWidget):
         ll.addWidget(g_exp)
         self.warn = QtWidgets.QLabel()
         self.warn.setWordWrap(True)
-        self.warn.setStyleSheet("color: #d9822b;")
+        self.warn.setStyleSheet("color: palette(link);")
         ll.addWidget(self.warn)
         ll.addStretch(1)
 
@@ -313,6 +314,13 @@ class TSTab(QtWidgets.QWidget):
                            spl_ref=self.spl_ref.currentData(), xmax=self._xmax())
         except Exception as e:      # noqa: BLE001
             QtWidgets.QApplication.restoreOverrideCursor()
+            # altes Ergebnis nicht stehen lassen – es passt nicht mehr zu den Eingaben
+            self.result = None
+            self.table.setRowCount(0)
+            for b in (self.btn_clip, self.btn_export, self.btn_sheet):
+                b.setEnabled(False)
+            self.warn.setStyleSheet(f"color: {appearance().current.err};")
+            self.warn.setText(f"Keine Berechnung: {e}")
             if not silent:
                 QtWidgets.QMessageBox.warning(self, "T/S-Parameter", str(e))
             return
@@ -376,7 +384,8 @@ class TSTab(QtWidgets.QWidget):
                 self.table.setItem(i, c, it)
         self.table.resizeColumnsToContents()
         self.table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
-        self.warn.setText("\n".join(ts.warnings))
+        self.warn.setStyleSheet(f"color: {appearance().current.warn};")
+        self.warn.setText("\n\n".join(ts.warnings))
         for b in (self.btn_clip, self.btn_export, self.btn_sheet):
             b.setEnabled(True)
         self._plot(ts, free, second)

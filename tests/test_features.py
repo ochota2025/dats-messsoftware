@@ -342,3 +342,44 @@ def test_device_watcher_polls_signature(qtbot=None):
     w._poll()
     assert hits == [1]
     del app
+
+
+# ---- T/S: Mindestverschiebung durch Zusatzmasse / Testgehäuse -------------------------
+
+@pytest.mark.parametrize("method,kw,expect", [
+    ("added_mass", {"added_mass": 0.0005}, "abort"),      # ~1 % Absenkung
+    ("added_mass", {"added_mass": 0.005}, "warn"),        # ~10 %
+    ("added_mass", {"added_mass": 0.020}, "ok"),          # ~28 %
+    ("test_box", {"vb": 0.2}, "abort"),                   # ~5 % Anhebung (knapp darunter)
+    ("test_box", {"vb": 0.08}, "warn"),                   # ~12 %
+    ("test_box", {"vb": 0.02}, "ok"),                     # ~41 %
+])
+def test_ts_minimum_shift(method, kw, expect):
+    from datsmess.analysis.ts import VasMethod, derive_ts, fit_driver
+    d = SimulatorBackend().driver
+    f = np.geomspace(5, 20000, 4000)
+    fit1 = fit_driver(f, d.impedance(f))
+    z2 = d.impedance(f, added_mass=kw["added_mass"]) if "added_mass" in kw else d.impedance(f, box_volume=kw["vb"])
+    fit2 = fit_driver(f, z2, re_dc=fit1.Re, fix_re=True)
+    meth = VasMethod.ADDED_MASS if method == "added_mass" else VasMethod.TEST_BOX
+    if expect == "abort":
+        with pytest.raises(ValueError, match="zu wenig"):
+            derive_ts(fit1, meth, sd=d.Sd, second=fit2, **kw)
+        return
+    p = derive_ts(fit1, meth, sd=d.Sd, second=fit2, **kw)
+    assert p.shift > 0.05 and p.uncertainty > 0
+    has_warning = any("unsicher" in w for w in p.warnings)
+    assert has_warning == (expect == "warn")
+    assert p.Vas == pytest.approx(d.Vas, rel=0.02)
+    keys = [r[0] for r in p.rows()]
+    assert "shift" in keys and "unc" in keys
+
+
+def test_ts_recommendation_values():
+    from datsmess.analysis.ts import VasMethod, derive_ts, fit_driver
+    d = SimulatorBackend().driver
+    f = np.geomspace(5, 20000, 4000)
+    fit1 = fit_driver(f, d.impedance(f))
+    fit2 = fit_driver(f, d.impedance(f, added_mass=0.005), re_dc=fit1.Re, fix_re=True)
+    p = derive_ts(fit1, VasMethod.ADDED_MASS, sd=d.Sd, second=fit2, added_mass=0.005)
+    assert "17 g" in p.recommendation                # Mms 22 g · (1/0,75² − 1) ≈ 17 g

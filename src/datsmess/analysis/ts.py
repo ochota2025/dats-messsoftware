@@ -222,6 +222,28 @@ VAS_METHOD_LABELS = {
 
 NEEDS_SECOND_MEASUREMENT = {VasMethod.ADDED_MASS, VasMethod.TEST_BOX}
 
+# Mindestverschiebung von fs durch Zusatzmasse bzw. Testgehäuse. Bei kleinem Shift werden Messfehler
+# stark vergrößert (Mms = m / ((fs/fs')² − 1)): 1 % Shift → Vas/Mms rund ±20 % daneben.
+SHIFT_ABORT = 0.05          # darunter: Abbruch – Ergebnis wäre bedeutungslos
+SHIFT_WARN = 0.20           # darunter: rechnen, aber mit Warnung und Unsicherheitsangabe
+SHIFT_TARGET_MASS = 0.25    # Empfehlung: fs um 25 % absenken
+SHIFT_TARGET_BOX = 0.30     # Empfehlung: fs um 30 % anheben
+SIGMA_F = 0.002             # typische relative Unsicherheit von fs aus dem Modell-Fit
+SIGMA_Q = 0.01              # typische relative Unsicherheit von Qes
+
+
+def _round_nice(x: float) -> float:
+    """Für Empfehlungen: 2 signifikante Stellen (17,3 → 17; 0,734 → 0,73)."""
+    if x <= 0 or not np.isfinite(x):
+        return x
+    return float(f"{x:.2g}")
+
+
+def _fmt(x: float, unit: str) -> str:
+    v = _round_nice(x)
+    txt = f"{v:g}".replace(".", ",")
+    return f"{txt} {unit}"
+
 
 @dataclass
 class TSParameters:
@@ -240,6 +262,9 @@ class TSParameters:
     SPL_283: float | None = None
     Vd: float | None = None
     warnings: list[str] = field(default_factory=list)
+    shift: float | None = None            # relative fs-Verschiebung durch die Zweitmessung
+    uncertainty: float | None = None      # geschätzte relative Unsicherheit von Vas/Mms durch fs/Qes-Fehler
+    recommendation: str | None = None     # Vorschlag für Zusatzmasse bzw. Testvolumen
 
     def rows(self) -> list[tuple[str, str, float | None, str, str]]:
         """(Schlüssel, Bezeichnung, Wert in Anzeigeeinheit, Einheit, Format)."""
@@ -279,6 +304,12 @@ class TSParameters:
         if self.second_fit is not None:
             rows.insert(5, ("fs2", "f_s Zweitmessung", self.second_fit.fs, "Hz", "{:.2f}"))
             rows.insert(6, ("Qes2", "Q_es Zweitmessung", self.second_fit.Qes, "", "{:.3f}"))
+        if self.shift is not None:
+            what = "f_s-Absenkung durch Zusatzmasse" if self.method == VasMethod.ADDED_MASS \
+                else "f_s-Anhebung im Testgehäuse"
+            rows.insert(7, ("shift", what, self.shift * 100, "%", "{:.1f}"))
+        if self.uncertainty is not None:
+            rows.insert(8, ("unc", "Unsicherheit V_as/M_ms (geschätzt)", self.uncertainty * 100, "%", "± {:.1f}"))
         return rows
 
 
@@ -299,6 +330,15 @@ def derive_ts(fit: ImpedanceFit, method: VasMethod, *, sd: float | None, second:
         if ratio <= 0:
             raise ValueError("Resonanz mit Zusatzmasse ist nicht niedriger als ohne – Messung prüfen.")
         p.Mms = added_mass / ratio
+        # Empfehlung: Masse für 25 % Absenkung, m = Mms·(1/(1−s)² − 1)
+        m_rec = p.Mms * (1 / (1 - SHIFT_TARGET_MASS) ** 2 - 1)
+        p.recommendation = (f"Für ein belastbares Ergebnis etwa {_fmt(m_rec * 1e3, 'g')} Zusatzmasse verwenden "
+                            f"(bisher {_fmt(added_mass * 1e3, 'g')}) – das senkt f_s um rund 25 %.")
+        drop = 1 - second.fs / fs
+        r2 = (fs / second.fs) ** 2
+        p.shift = drop
+        p.uncertainty = 2 * r2 / (r2 - 1) * np.sqrt(2) * SIGMA_F
+        _check_shift(p, drop, "Die Zusatzmasse senkt f_s nur um")
         p.Cms = 1 / (ws ** 2 * p.Mms)
         if sd:
             p.Vas = rc2 * sd ** 2 * p.Cms
@@ -309,6 +349,15 @@ def derive_ts(fit: ImpedanceFit, method: VasMethod, *, sd: float | None, second:
         if factor <= 0:
             raise ValueError("Resonanz im Testgehäuse ist nicht höher als in Freiluft – Messung prüfen.")
         p.Vas = vb * factor
+        # Empfehlung: Volumen für 30 % Anhebung; im geschlossenen Gehäuse gilt fc·Qec/(fs·Qes) ≈ (fc/fs)²
+        vb_rec = p.Vas / ((1 + SHIFT_TARGET_BOX) ** 2 - 1)
+        p.recommendation = (f"Für ein belastbares Ergebnis ein Testgehäuse mit höchstens etwa "
+                            f"{_fmt(vb_rec * 1e3, 'L')} verwenden (bisher {_fmt(vb * 1e3, 'L')}) – das hebt "
+                            f"f_s um rund 30 %.")
+        rise = second.fs / fs - 1
+        p.shift = rise
+        p.uncertainty = (factor + 1) / factor * np.sqrt(2 * SIGMA_F ** 2 + 2 * SIGMA_Q ** 2)
+        _check_shift(p, rise, "Das Testgehäuse hebt f_s nur um")
         if sd:
             p.Cms = p.Vas / (rc2 * sd ** 2)
             p.Mms = 1 / (ws ** 2 * p.Cms)
@@ -343,6 +392,23 @@ def derive_ts(fit: ImpedanceFit, method: VasMethod, *, sd: float | None, second:
     if fit.rms_error > 0.05:
         p.warnings.append(f"Modell passt nur mäßig ({fit.rms_error * 100:.1f} % RMS) – Messung/Bereich prüfen.")
     return p
+
+
+def _pct(x: float) -> str:
+    v = x * 100
+    return (f"{v:.1f}" if v < 10 else f"{v:.0f}").replace(".", ",") + " %"
+
+
+def _check_shift(p: TSParameters, shift: float, what: str) -> None:
+    """Abbruch unter 5 % Verschiebung, Warnung unter 20 % – jeweils mit Empfehlung."""
+    txt = f"{what} {shift * 100:.1f} %".replace(".", ",")
+    if shift < SHIFT_ABORT:
+        raise ValueError(f"{txt} – zu wenig für ein belastbares Ergebnis (mindestens 5 %, besser 25–30 %; "
+                         f"V_as und M_ms lägen um bis zu ±{_pct(p.uncertainty)} daneben).\n\n"
+                         f"{p.recommendation}")
+    if shift < SHIFT_WARN:
+        p.warnings.append(f"{txt} – das Ergebnis ist unsicher (V_as/M_ms etwa ±{_pct(p.uncertainty)}). "
+                          f"{p.recommendation}")
 
 
 def sd_from_diameter(d_m: float) -> float:

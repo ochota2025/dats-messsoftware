@@ -128,7 +128,12 @@ def build_sheet(m: Measurement, *, title: str, info, ts: TSParameters | None = N
             txt += f", {inp['spl_db']:g} dB"
         cond.append(("Vas-Methode", txt))
         if ts.second_fit is not None:
-            cond.append(("Zweitmessung", f"fs = {ts.second_fit.fs:.2f} Hz, Qes = {ts.second_fit.Qes:.3f}"))
+            txt = f"fs = {ts.second_fit.fs:.2f} Hz, Qes = {ts.second_fit.Qes:.3f}"
+            if ts.shift is not None:
+                txt += f", fs-Verschiebung {ts.shift * 100:.1f} %"
+            if ts.uncertainty is not None:
+                txt += f", Unsicherheit Vas/Mms ± {ts.uncertainty * 100:.1f} %"
+            cond.append(("Zweitmessung", txt))
         cond.append(("Modellabweichung", f"{ts.fit.rms_error * 100:.2f} % "
                                          f"({ts.fit.f_range[0]:.0f} Hz – {ts.fit.f_range[1] / 1000:.0f} kHz)"))
     cond.append(("Kalibrierung", "ja" if m.meta.get("calibrated") else "nein / importiert"))

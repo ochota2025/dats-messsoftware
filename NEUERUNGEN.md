@@ -1,5 +1,19 @@
 # Neuerungen
 
+## 0.2.7 – 08.11.2026
+
+- **Mindestverschiebung bei der Vas-Bestimmung:** Zusatzmasse bzw. Testgehäuse müssen fs
+  ausreichend verschieben, sonst werden kleine Messfehler stark vergrößert (1 % Verschiebung →
+  Vas/Mms rund ±25 % daneben).
+  - unter 5 % Verschiebung: keine Berechnung, mit Erklärung
+  - 5 bis 20 %: Berechnung mit deutlicher Warnung und geschätzter Unsicherheit
+  - in beiden Fällen der konkrete Tipp, welche Zusatzmasse bzw. welches Testvolumen etwa
+    25–30 % Verschiebung ergibt
+- Verschiebung und geschätzte Unsicherheit stehen in der Ergebnistabelle und auf dem Datenblatt.
+- Schlägt eine Berechnung fehl, verschwindet das alte Ergebnis, damit es nicht für das neue
+  gehalten wird.
+- Voreinstellung der Zusatzmasse 20 g statt 10 g.
+
 ## 0.2.6 – 08.11.2026
 
 - **Kennwerte als große Kacheln:** fs, Qts (hervorgehoben), Re, Qes, Zmax, Qms, Le und die

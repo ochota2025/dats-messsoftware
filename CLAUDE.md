@@ -25,7 +25,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 78 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 85 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -85,5 +85,7 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 
 - Läuft beim Tester unter Windows (Simulator). **Noch nie mit echtem DATS V3 getestet** –
   Kanalzuordnung, Wert des Kalibrierwiderstands und Kalibrierung sind die Unbekannten.
+- T/S mit Zweitmessung: `analysis/ts.py` prüft die fs-Verschiebung (Abbruch < 5 %, Warnung < 20 %,
+  Unsicherheit und Empfehlung für Masse/Volumen) – Schwellen als Konstanten `SHIFT_*`.
 - Forderungskatalog vollständig (FA-01, FA-03 elektrisch, OS-01 seit 0.2.0). Native Treiberdateien von WinISD/VituixCAD/Boxsim/LEAP/AJ-Horn sind
   nicht öffentlich spezifiziert – Profile liefern Eingabelisten.
