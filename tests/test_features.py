@@ -216,3 +216,55 @@ def test_simulator_distortion_keeps_low_end_clean():
     (f, z0), (_, z1) = curves
     sel = (f >= 1) & (f < 10)
     assert np.max(np.abs(z1[sel] / z0[sel] - 1)) < 0.005
+
+
+# ---- Geräteauswahl (Windows meldet Ein- und Ausgang getrennt) -------------------------
+
+def _win_devices():
+    from datsmess.audio.backend import DeviceInfo as D
+    return [
+        D(0, "Microsoft Soundmapper - Input", "MME", 2, 0, 44100),
+        D(1, "Mikrofon (DATS V3)", "MME", 2, 0, 44100),
+        D(2, "Mikrofonarray (Realtek(R) Audio", "MME", 2, 0, 44100),       # MME kürzt auf 31 Zeichen
+        D(3, "Lautsprecher (DATS V3)", "MME", 0, 2, 44100),
+        D(4, "Lautsprecher (Realtek(R) Audio)", "MME", 0, 2, 44100),
+        D(5, "Primärer Soundtreiber", "Windows DirectSound", 0, 2, 44100),
+        D(6, "Mikrofon (DATS V3)", "Windows DirectSound", 2, 0, 44100),
+        D(7, "Lautsprecher (DATS V3)", "Windows DirectSound", 0, 2, 44100),
+        D(8, "Lautsprecher (DATS V3)", "Windows WASAPI", 0, 2, 48000),
+        D(9, "Mikrofon (DATS V3)", "Windows WASAPI", 2, 0, 48000),
+        D(10, "Lautsprecher (Realtek(R) Audio)", "Windows WASAPI", 0, 2, 48000),
+        D(11, "Mikrofonarray (Realtek(R) Audio)", "Windows WASAPI", 4, 0, 48000),
+        D(12, "Kopfhörer (Bluetooth Headset)", "Windows WASAPI", 0, 2, 48000),
+    ]
+
+
+def test_device_choices_pair_and_prefer_wasapi():
+    from datsmess.audio.backend import device_choices
+    ch = device_choices(_win_devices(), 48000, supports=lambda i, o, fs: True)
+    dats = ch[0]
+    assert dats.is_dats and dats.usable and dats.hostapi == "Windows WASAPI" and dats.indices == (9, 8)
+    realtek = next(c for c in ch if "Realtek" in c.name)
+    assert realtek.usable and realtek.dimmed and realtek.indices == (11, 10)
+    grey = [c for c in ch if not c.usable]
+    assert [c.out.name for c in grey] == ["Kopfhörer (Bluetooth Headset)"]
+    assert "nur einen Ausgang" in grey[0].reason
+    assert not any("Soundmapper" in c.label or "Primärer" in c.label for c in ch)
+    assert len([c for c in ch if c.usable]) == 2                       # keine Dubletten je Schnittstelle
+
+
+def test_device_choices_fall_back_when_wasapi_rejects_rate():
+    from datsmess.audio.backend import device_choices
+    ch = device_choices(_win_devices(), 44100, supports=lambda i, o, fs: o.hostapi != "Windows WASAPI")
+    assert ch[0].is_dats and ch[0].hostapi == "Windows DirectSound"
+
+
+def test_device_choices_full_duplex_and_keys_stable():
+    from datsmess.audio.backend import DeviceInfo as D, device_choices
+    mac = [D(0, "DATS V3", "Core Audio", 2, 2, 48000), D(1, "Mac mini-Lautsprecher", "Core Audio", 0, 2, 48000)]
+    ch = device_choices(mac, 48000, supports=lambda i, o, fs: True)
+    assert ch[0].indices == (0, 0) and ch[0].label == "★ DATS V3 (Core Audio)"
+    assert not ch[1].usable
+    k48 = device_choices(_win_devices(), 48000, supports=lambda i, o, fs: True)[0].key
+    k44 = device_choices(_win_devices(), 44100, supports=lambda i, o, fs: o.hostapi != "Windows WASAPI")[0].key
+    assert k48 == k44                                                    # Auswahl bleibt beim Ratenwechsel

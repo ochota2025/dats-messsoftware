@@ -231,7 +231,7 @@ QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabl
 QComboBox {{ padding-right: 24px; }}
 QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right; width: 22px; border: none; }}
 QComboBox::down-arrow {{ image: url({down}); width: 12px; height: 12px; }}
-QComboBox QAbstractItemView {{ background: {a.card_bg}; color: {a.text}; border: 1px solid {a.border};
+QComboBox QAbstractItemView {{ background: {a.card_bg}; border: 1px solid {a.border};
     border-radius: 6px; padding: 4px; selection-background-color: {a.accent_tint}; selection-color: {a.text};
     outline: none; }}
 QSpinBox, QDoubleSpinBox {{ padding-right: 22px; }}

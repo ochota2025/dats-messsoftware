@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import __version__, diagnostics, updates
-from ..audio.backend import CONNECTIONS, SoundDeviceBackend, find_dats, list_devices
+from ..audio.backend import CONNECTIONS, SoundDeviceBackend, device_choices, list_devices
 from ..audio.simulator import SimulatorBackend
 from ..io import project as projio
 from ..io.watch import WatchFolderConfig
@@ -38,6 +38,8 @@ log = logging.getLogger("datsmess")
 
 SWEEP_LENGTHS = {15: "kurz (≈ 0,7 s)", 16: "mittel (≈ 1,4 s)", 17: "standard (≈ 2,7 s)", 18: "lang (≈ 5,5 s)"}
 MAX_RECENT = 8
+KEY_ROLE = QtCore.Qt.UserRole + 1           # Geräteschlüssel (für die gespeicherte Auswahl)
+NAME_ROLE = QtCore.Qt.UserRole + 2          # Anzeigename des Geräts
 AUTOSAVE_MS = 120_000
 
 
@@ -367,6 +369,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cb_device = QtWidgets.QComboBox()
         self.cb_device.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.cb_device.setMinimumContentsLength(10)
+        # Standard-Delegate: beachtet die graue Schrift (ForegroundRole) auch mit Stylesheet
+        self.cb_device.setItemDelegate(QtWidgets.QStyledItemDelegate(self.cb_device))
         btn_refresh = QtWidgets.QToolButton()
         btn_refresh.setText("↻")
         btn_refresh.setToolTip("Geräteliste aktualisieren")
@@ -374,6 +378,12 @@ class MainWindow(QtWidgets.QMainWindow):
         row.addWidget(self.cb_device, 1)
         row.addWidget(btn_refresh)
         f.addRow("Gerät:", row)
+        self.lbl_device_hint = QtWidgets.QLabel("Graue Einträge eignen sich nicht zum Messen – "
+                                                "Maus drüberhalten für die Erklärung.")
+        self.lbl_device_hint.setWordWrap(True)
+        self.lbl_device_hint.setStyleSheet("color: palette(placeholder-text); font-size: 11px;")
+        self.lbl_device_hint.setVisible(False)
+        f.addRow(self.lbl_device_hint)
         self.cb_fs = QtWidgets.QComboBox()
         for fs in (44100, 48000):
             self.cb_fs.addItem(f"{fs / 1000:g} kHz", fs)
@@ -476,6 +486,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sidebar_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
 
         self.cb_device.currentIndexChanged.connect(self._device_changed)
+        self.cb_fs.currentIndexChanged.connect(lambda: self._populate_devices())   # Schnittstelle je Rate
         for wdg in (self.cb_fs, self.cb_len, self.cb_mode):
             wdg.currentIndexChanged.connect(self._sweep_changed)
         self.level.valueChanged.connect(self._sweep_changed)
@@ -653,31 +664,58 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # -- Geräte ---------------------------------------------------------
     def _populate_devices(self, select_saved: bool = False):
-        saved = self.settings.value("device_name", "") if select_saved else self.cb_device.currentText()
+        """Geräteliste: ein Eintrag je Gerät (Ein- und Ausgang zusammengeführt, beste Schnittstelle).
+        Nicht geeignete Geräte stehen ausgegraut in der Liste, mit Erklärung im Tooltip."""
+        if select_saved:
+            saved = self.settings.value("device_key", "")
+        else:
+            saved = self.cb_device.currentData(KEY_ROLE) or ""
+        fs = self.cb_fs.currentData() or 48000
+        choices = device_choices(list_devices(), fs)
+        a = appearance().current
         self.cb_device.blockSignals(True)
         self.cb_device.clear()
         self.cb_device.addItem("Simulator", None)
-        devices = [d for d in list_devices() if d.max_in >= 1 and d.max_out >= 1]
-        for d in devices:
-            self.cb_device.addItem(("★ " if d.looks_like_dats else "") + d.label, d.index)
-        for i in range(self.cb_device.count()):
-            self.cb_device.setItemData(i, self.cb_device.itemText(i), QtCore.Qt.ToolTipRole)
-        idx = self.cb_device.findText(saved) if saved else -1
-        if idx < 0:
-            dats = find_dats(devices)
-            idx = self.cb_device.findData(dats.index) if dats else 0
-        self.cb_device.setCurrentIndex(max(idx, 0))
+        self.cb_device.setItemData(0, "sim", KEY_ROLE)
+        self.cb_device.setItemData(0, "Virtuelles DATS mit Testtreiber und Bauteilen – zum Ausprobieren "
+                                      "ohne Hardware.", QtCore.Qt.ToolTipRole)
+        model = self.cb_device.model()
+        n_grey = 0
+        for c in choices:
+            self.cb_device.addItem(c.label, c.indices)
+            i = self.cb_device.count() - 1
+            self.cb_device.setItemData(i, c.key, KEY_ROLE)
+            self.cb_device.setItemData(i, c.name, NAME_ROLE)
+            self.cb_device.setItemData(i, c.reason, QtCore.Qt.ToolTipRole)
+            if not c.usable:
+                model.item(i).setEnabled(False)
+                self.cb_device.setItemData(i, QtGui.QColor(a.muted), QtCore.Qt.ForegroundRole)
+                f = self.cb_device.font()
+                f.setItalic(True)
+                self.cb_device.setItemData(i, f, QtCore.Qt.FontRole)
+                n_grey += 1
+            elif c.dimmed:
+                self.cb_device.setItemData(i, QtGui.QColor(a.muted), QtCore.Qt.ForegroundRole)
+                n_grey += 1
+        self.lbl_device_hint.setVisible(n_grey > 0)
+        idx = self.cb_device.findData(saved, KEY_ROLE) if saved else -1
+        if idx < 0 or not model.item(idx).isEnabled():
+            dats = next((i for i, c in enumerate(choices, start=1) if c.usable and c.is_dats), None)
+            idx = dats if dats is not None else 0
+        self.cb_device.setCurrentIndex(idx)
         self.cb_device.blockSignals(False)
+        log.info("Geräteliste (%g kHz): %s", fs / 1000,
+                 "; ".join(f"{c.label}{'' if c.usable else ' [grau]'}" for c in choices) or "keine")
         self._device_changed()
 
     def _device_changed(self):
         idx = self.cb_device.currentData()
-        self.cb_device.setToolTip(self.cb_device.currentText())
+        self.cb_device.setToolTip(self.cb_device.currentData(QtCore.Qt.ToolTipRole) or self.cb_device.currentText())
         if idx is None:
             backend = self._sim
         else:
             try:
-                backend = SoundDeviceBackend(idx, idx)
+                backend = SoundDeviceBackend(idx[0], idx[1], label=self.cb_device.currentData(NAME_ROLE))
             except Exception as e:      # noqa: BLE001
                 log.exception("Gerät öffnen")
                 errors.show_error(self, "Audio", f"Gerät kann nicht geöffnet werden: {e}")
@@ -813,7 +851,7 @@ class MainWindow(QtWidgets.QMainWindow):
             ev.ignore()
             return
         s = self.settings
-        s.setValue("device_name", self.cb_device.currentText())
+        s.setValue("device_key", self.cb_device.currentData(KEY_ROLE) or "")
         s.setValue("fs", self.cb_fs.currentData())
         s.setValue("sweep_exp", self.cb_len.currentData())
         s.setValue("mode", self.cb_mode.currentData())

@@ -25,7 +25,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 66 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 70 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -59,6 +59,10 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
   card_bg, border, muted …) oder Stylesheets mit `palette(...)`; Diagramme reagieren auf
   `appearance().changed`. Das globale Stylesheet steht in `appearance.stylesheet()`; der große
   Mess-Knopf ist `objectName("primary")`.
+- **Windows-Geräte:** MME/DirectSound/WASAPI melden jedes Gerät (auch das DATS) als getrenntes
+  „Lautsprecher (…)“ und „Mikrofon (…)“ – je Schnittstelle. `audio/backend.device_choices` führt
+  sie über den Namen in Klammern zu Paaren zusammen und bevorzugt WASAPI (Fallback, wenn die
+  Abtastrate nicht passt). Gespeichert wird `device_key`, nicht der Anzeigetext.
 - **Audio-Dauerbetrieb** (Generator/Oszilloskop/Pegelanzeige) blockiert das Gerät: `AppState.run`
   stoppt ihn vor jeder Messung (`stop_audio`), `SoundDeviceBackend.play_record` ebenfalls.
 - Unter Windows läuft `pythonw` ohne Konsole: Fehler gehen ins Protokoll (`datsmess.log` im

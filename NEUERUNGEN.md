@@ -1,5 +1,16 @@
 # Neuerungen
 
+## 0.2.2 – 08.11.2026
+
+- **Geräteauswahl überarbeitet:** Windows meldet Soundkarten – auch das DATS – als zwei getrennte
+  Geräte (Lautsprecher und Mikrofon), und das für jede Treiber-Schnittstelle noch einmal. Die
+  Auswahl führt Ein- und Ausgang jetzt zu einem Eintrag zusammen und wählt automatisch die beste
+  Schnittstelle (WASAPI, sonst DirectSound oder MME), die die eingestellte Abtastrate kann.
+  Ohne diese Änderung wäre das DATS unter Windows vermutlich gar nicht in der Liste erschienen.
+- Die eingebaute Soundkarte steht jetzt in der Liste, aber grau. Geräte mit nur Ausgang oder nur
+  Eingang sind grau und kursiv und lassen sich nicht wählen. Wer mit der Maus darüberfährt, sieht
+  die Erklärung.
+
 ## 0.2.1 – 08.11.2026
 
 - **Behoben:** Im Simulator war die Impedanzkurve unterhalb von etwa 10 Hz unruhig. Ursache war

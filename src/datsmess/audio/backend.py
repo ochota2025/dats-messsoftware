@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import threading
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -108,16 +108,193 @@ def find_dats(devices: list[DeviceInfo] | None = None) -> DeviceInfo | None:
     return None
 
 
+# --------------------------------------------------------------------------
+# Geräteauswahl: Ein- und Ausgang zusammenführen, beste Treiber-Schnittstelle wählen
+# --------------------------------------------------------------------------
+#
+# Windows meldet USB-Audiogeräte (auch das DATS) bei MME, DirectSound und WASAPI als *zwei* Geräte:
+# „Lautsprecher (Gerät)“ nur mit Ausgang und „Mikrofon (Gerät)“ nur mit Eingang – und das für jede
+# Schnittstelle noch einmal. Für die Auswahl werden Ein- und Ausgang desselben Geräts (gleicher Name
+# in Klammern, gleiche Schnittstelle) zu einem Eintrag zusammengefasst; je Gerät bleibt der Eintrag
+# der besten Schnittstelle, die die Abtastrate kann. WASAPI liefert die Daten ohne Umweg über den
+# alten MME-Mixer (der Namen auf 31 Zeichen kürzt und ggf. umrechnet).
+
+HOSTAPI_RANK = {"Windows WASAPI": 0, "Core Audio": 0, "ALSA": 0, "JACK Audio Connection Kit": 1,
+                "Windows DirectSound": 2, "MME": 3, "Windows WDM-KS": 4}
+# Sammel-/Ersatzeinträge der Treiber, die kein echtes Gerät sind
+PSEUDO_DEVICES = ("microsoft soundmapper", "primärer sound", "primary sound", "sound mapper")
+
+
+def device_key(name: str) -> str:
+    """Gerätename ohne Schnittstelle (MME kürzt auf 31 Zeichen) – zum Zusammenfassen."""
+    return " ".join(name[:31].split()).lower()
+
+
+def physical_name(name: str) -> str:
+    """„Lautsprecher (Realtek(R) Audio)“ → „Realtek(R) Audio“ (auch bei von MME gekürzten Namen)."""
+    i = name.find("(")
+    if i < 0:
+        return name.strip()
+    inner = name[i + 1:].strip()
+    if inner.endswith(")") and inner.count("(") < inner.count(")"):
+        inner = inner[:-1]
+    return inner.strip() or name.strip()
+
+
+@dataclass
+class DeviceChoice:
+    """Ein Eintrag der Geräteauswahl (Eingang und Ausgang können verschiedene Geräte sein)."""
+    inp: DeviceInfo | None
+    out: DeviceInfo | None
+    hostapi: str
+    usable: bool                      # auswählbar
+    reason: str                       # Erklärung für den Tooltip
+    alternatives: list[str] = field(default_factory=list)
+
+    @property
+    def is_dats(self) -> bool:
+        return any(d is not None and d.looks_like_dats for d in (self.inp, self.out))
+
+    @property
+    def dimmed(self) -> bool:
+        """Auswählbar, aber kein DATS erkannt (z. B. eingebaute Soundkarte) → grau darstellen."""
+        return self.usable and not self.is_dats
+
+    @property
+    def indices(self) -> tuple[int, int] | None:
+        return (self.inp.index, self.out.index) if self.usable else None
+
+    @property
+    def name(self) -> str:
+        if self.inp is not None and self.out is not None and self.inp.index != self.out.index:
+            return physical_name(self.out.name)
+        return (self.inp or self.out).name
+
+    @property
+    def key(self) -> str:
+        if self.usable:
+            return "pair|" + device_key(physical_name(self.out.name)) + "|" + device_key(self.out.name)
+        d = self.inp or self.out
+        return "single|" + device_key(d.name)
+
+    @property
+    def label(self) -> str:
+        if not self.usable:
+            d = self.inp or self.out
+            return f"{d.name} – {'nur Ausgang' if self.inp is None else 'nur Eingang'}"
+        star = "★ " if self.is_dats else ""
+        return f"{star}{self.name} ({self.hostapi})"
+
+
+def _supports(sd, inp: DeviceInfo, out: DeviceInfo, fs: int) -> bool:
+    try:
+        sd.check_input_settings(device=inp.index, channels=min(2, inp.max_in), samplerate=fs)
+        sd.check_output_settings(device=out.index, channels=min(2, out.max_out), samplerate=fs)
+        return True
+    except Exception:       # noqa: BLE001
+        return False
+
+
+def _pair_reason(inp: DeviceInfo, out: DeviceInfo, api: str, ok_fs: bool, fs: int) -> str:
+    if inp.index == out.index:
+        lines = [inp.name, f"Schnittstelle: {api}, {inp.max_in} Eingänge / {out.max_out} Ausgänge"]
+    else:
+        lines = [physical_name(out.name), f"Schnittstelle: {api}",
+                 f"Ausgang: {out.name} ({out.max_out} Kanäle)", f"Eingang: {inp.name} ({inp.max_in} Kanäle)"]
+    if not ok_fs:
+        lines.append(f"Achtung: {fs / 1000:g} kHz werden laut Treiber nicht unterstützt – andere Abtastrate wählen.")
+    if inp.looks_like_dats or out.looks_like_dats:
+        lines.append("DATS erkannt – dieses Gerät zum Messen verwenden.")
+    else:
+        lines.append("Kein DATS erkannt. Ausgabe und Aufnahme funktionieren (z. B. für Generator und "
+                     "Oszilloskop), aber Impedanzen lassen sich nur mit der Messbrücke des DATS messen.")
+        if inp.max_in < 2:
+            lines.append("Nur ein Eingang – für die Messbrücke werden zwei gebraucht.")
+    return "\n".join(lines)
+
+
+def device_choices(devices: list[DeviceInfo], fs: int, supports=None) -> list[DeviceChoice]:
+    """Einträge für die Geräteauswahl. ``supports(inp, out, fs)`` ist für Tests austauschbar."""
+    if supports is None:
+        try:
+            import sounddevice as sd
+            supports = lambda i, o, rate: _supports(sd, i, o, rate)     # noqa: E731
+        except Exception:   # noqa: BLE001
+            supports = lambda i, o, rate: True                          # noqa: E731
+    devices = [d for d in devices if not d.name.lower().startswith(PSEUDO_DEVICES)]
+
+    # 1) Kandidaten je Schnittstelle: Vollduplex-Geräte und Paare (Mikrofon + Lautsprecher desselben Geräts)
+    pairs: list[tuple[DeviceInfo, DeviceInfo]] = []
+    paired: set[int] = set()
+    for d in devices:
+        if d.max_in >= 1 and d.max_out >= 1:
+            pairs.append((d, d))
+            paired.add(d.index)
+    groups: dict[tuple[str, str], list[DeviceInfo]] = {}
+    for d in devices:
+        if d.index not in paired:
+            groups.setdefault((d.hostapi, device_key(physical_name(d.name))), []).append(d)
+    for members in groups.values():
+        ins = sorted((d for d in members if d.max_in >= 1), key=lambda d: -d.max_in)
+        outs = [d for d in members if d.max_out >= 1]
+        if ins and outs:
+            for o in outs:
+                pairs.append((ins[0], o))
+                paired.update({ins[0].index, o.index})
+
+    # 2) je Gerät die beste Schnittstelle (die die Abtastrate kann)
+    best: dict[str, tuple] = {}
+    for inp, out in pairs:
+        k = device_key(physical_name(out.name)) + "|" + device_key(out.name if inp is not out else out.name)
+        ok = supports(inp, out, fs)
+        rank = (not ok, HOSTAPI_RANK.get(out.hostapi, 5), -len(out.name))
+        entry = best.get(k)
+        apis = (entry[3] if entry else set()) | {out.hostapi}
+        if entry is None or rank < entry[0]:
+            best[k] = (rank, inp, out, apis, ok)
+        else:
+            best[k] = (*entry[:3], apis, entry[4])
+    out_list = [DeviceChoice(inp, out, out.hostapi, True, _pair_reason(inp, out, out.hostapi, ok, fs),
+                             sorted(a for a in apis if a != out.hostapi))
+                for _rank, inp, out, apis, ok in best.values()]
+
+    # 3) übrig gebliebene reine Ein- oder Ausgänge: anzeigen, aber nicht auswählbar
+    singles: dict[str, DeviceInfo] = {}
+    for d in sorted(devices, key=lambda d: HOSTAPI_RANK.get(d.hostapi, 5)):
+        if d.index in paired:
+            continue
+        singles.setdefault(device_key(d.name), d)
+    taken = {device_key(c.out.name) for c in out_list} | {device_key(c.inp.name) for c in out_list}
+    for k, d in singles.items():
+        if k in taken:
+            continue
+        if d.max_in == 0:
+            reason = (f"{d.name} hat nur einen Ausgang (Lautsprecher/Kopfhörer).\n"
+                      "Zum Messen braucht es Ein- und Ausgang mit Messbrücke – das DATS.\n"
+                      "Die eingebaute Soundkarte meldet Windows als getrennte Geräte (Lautsprecher und Mikrofon).")
+            out_list.append(DeviceChoice(None, d, d.hostapi, False, reason))
+        else:
+            reason = (f"{d.name} hat nur einen Eingang (Mikrofon).\n"
+                      "Zum Messen braucht es Ein- und Ausgang mit Messbrücke – das DATS.\n"
+                      "Eingebaute Mikrofone sind meist einkanalig und regeln den Pegel automatisch.")
+            out_list.append(DeviceChoice(d, None, d.hostapi, False, reason))
+    out_list.sort(key=lambda c: (not c.usable, not c.is_dats, c.name.lower()))
+    return out_list
+
+
 class SoundDeviceBackend(AudioBackend):
     name = "Audio-Gerät"
 
-    def __init__(self, input_device: int | None, output_device: int | None):
+    def __init__(self, input_device: int | None, output_device: int | None, label: str | None = None):
         import sounddevice as sd
         self._sd = sd
         self.input_device = input_device
         self.output_device = output_device
+        self.label = label
 
     def describe(self) -> str:
+        if self.label:
+            return self.label
         try:
             i = self._sd.query_devices(self.input_device, "input")["name"]
             o = self._sd.query_devices(self.output_device, "output")["name"]
