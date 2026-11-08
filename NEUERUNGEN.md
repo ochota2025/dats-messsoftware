@@ -1,5 +1,12 @@
 # Neuerungen
 
+## 0.2.11 – 08.11.2026
+
+- Bei festgelegten Frequenzbereichen („Hörbereich“, „Bereich festlegen …“) stehen die
+  Eckfrequenzen (z. B. 20 Hz und 20 kHz) jetzt in der Achsenbeschriftung. Die Achse hat dafür
+  einen kleinen Rand.
+- Betrags- und Phasendiagramm liegen exakt bündig übereinander.
+
 ## 0.2.10 – 08.11.2026
 
 - **Behoben:** Beim Umschalten von „|Z| log“ (und zwischen Betrag/Phase und Real/Imaginär) sprang

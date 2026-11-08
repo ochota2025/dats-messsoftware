@@ -164,6 +164,8 @@ class ImpedancePlot(QtWidgets.QWidget):
             p.setMenuEnabled(False)     # eigenes Menü mit echten Werten statt interner Log-Werte
             p.hideButtons()
         self.bottom.setXLink(self.top)
+        for pi in (self.top, self.bottom):         # gleiche Achsenbreite: beide Diagramme exakt bündig
+            pi.getAxis("left").setWidth(62)
         self.bottom.setLabel("bottom", "Frequenz [Hz]")
         self.legend = self.top.addLegend(offset=(-10, 10))
 
@@ -264,7 +266,11 @@ class ImpedancePlot(QtWidgets.QWidget):
         self.bottom.enableAutoRange()
 
     def set_freq_range(self, lo: float, hi: float):
-        self.top.setXRange(np.log10(lo), np.log10(hi), padding=0)
+        """Frequenzbereich setzen – mit kleinem Rand, damit die Eckfrequenzen (z. B. 20 Hz und 20 kHz)
+        noch beschriftet werden; Beschriftungen genau auf dem Achsenrand lässt pyqtgraph weg."""
+        a, b = np.log10(lo), np.log10(hi)
+        pad = 0.02 * (b - a)
+        self.top.setXRange(a - pad, b + pad, padding=0)
 
     def set_rect_zoom(self, on: bool):
         mode = pg.ViewBox.RectMode if on else pg.ViewBox.PanMode
