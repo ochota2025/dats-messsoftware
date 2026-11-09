@@ -1,5 +1,13 @@
 # Neuerungen
 
+## 0.2.19 – 09.11.2026
+
+- **Vergleichstabelle unter den Kennwerten wieder lesbar:** Im Touch-Modus waren die
+  Zeilenbeschriftungen (fs, Qts, Re …) abgeschnitten. Die Zeilen passen sich jetzt der Schrift an.
+- Die Spalten heißen wie die Kurven (z. B. „Messung 2“, „Testtreiber“) statt „Messu“ und „neu“.
+  Lange Namen werden in der Mitte gekürzt, der volle Name steht im Tooltip. Zwei Kurven passen
+  nebeneinander, erst ab drei wird quer gerollt.
+
 ## 0.2.18 – 09.11.2026
 
 - **Absturz beim Umschalten auf „Dunkel“ behoben.** Ursache war ein Zusammenspiel von Qt und der

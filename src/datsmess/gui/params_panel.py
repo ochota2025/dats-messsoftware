@@ -92,16 +92,17 @@ class QuickParams(QtWidgets.QGroupBox):
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
         self.table.setFocusPolicy(QtCore.Qt.NoFocus)
-        self.table.horizontalHeader().setDefaultSectionSize(56)
         self.table.horizontalHeader().setMinimumSectionSize(48)
-        self.table.verticalHeader().setDefaultSectionSize(20)
-        self.table.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Fixed)
+        self.table.horizontalHeader().setTextElideMode(QtCore.Qt.ElideMiddle)   # „Messung 1“/„Messung 2“ bleiben unterscheidbar
+        # Zeilenhöhe nicht fest: Kopfzeilen haben (im Touch-Modus großen) Innenabstand – bei fester
+        # Höhe von 20 px waren die Beschriftungen abgeschnitten (Tester, 0.2.18, Windows + Touch).
+        self.table.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        # Reine Anzeige (nichts anzutippen): auch im Touch-Modus knappe Kopfzeilen, damit zwei Kurven
+        # nebeneinander in die Seitenleiste passen.
+        self.table.setStyleSheet("QHeaderView::section { padding: 3px 6px; }")
         self.table.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        head_h = self.table.fontMetrics().height() + 12
-        scroll_h = self.table.style().pixelMetric(QtWidgets.QStyle.PM_ScrollBarExtent) + 2
-        self.table.setFixedHeight(head_h + 20 * len(ROWS) + scroll_h + 4)
-        self.table.setToolTip("Spalten: #n = Speicherplatz n, „neu“ = neueste Messung. "
+        self.table.setToolTip("Je Spalte eine sichtbare Kurve („3: …“ = Speicherplatz 3). "
                               "Vollständiger Name im Tooltip der Spaltenüberschrift.")
         lay.addWidget(self.table)
         self.hint = QtWidgets.QLabel()
@@ -173,13 +174,8 @@ class QuickParams(QtWidgets.QGroupBox):
         self.table.setColumnCount(len(visible))
         for c, m in enumerate(visible):
             slot = self.state.slot_of(m)
-            title = f"Platz {slot + 1}: {m.name}" if slot is not None else m.name
-            if slot is not None:
-                short = f"#{slot + 1}"
-            elif m is self.state.current_measurement():
-                short = "neu"
-            else:
-                short = m.name[:5]
+            title = f"Speicherplatz {slot + 1}: {m.name}" if slot is not None else m.name
+            short = f"{slot + 1}: {m.name}" if slot is not None else m.name
             head = QtWidgets.QTableWidgetItem(short)
             pm = QtGui.QPixmap(10, 10)
             pm.fill(QtGui.QColor(m.color or "#888"))
@@ -195,6 +191,32 @@ class QuickParams(QtWidgets.QGroupBox):
                     f.setBold(True)
                     it.setFont(f)
                 self.table.setItem(r, c, it)
-        hh = self.table.horizontalHeader()
-        fits = len(visible) * 64 <= max(self.table.viewport().width(), 200)
-        hh.setSectionResizeMode(QtWidgets.QHeaderView.Stretch if fits else QtWidgets.QHeaderView.Interactive)
+        self._fit_table_size()
+
+    def _fit_table_size(self):
+        """Spalten teilen sich die Breite (lange Namen enden auf „…“, voller Name im Tooltip); erst wenn
+        die Zahlen nicht mehr passen, wird quer gerollt. Höhe exakt passend, ohne leeren Rand."""
+        t = self.table
+        t.ensurePolished()
+        hh, vh = t.horizontalHeader(), t.verticalHeader()
+        n = t.columnCount()
+        t.resizeRowsToContents()
+        frame = 2 * t.frameWidth()
+        avail = t.width() - frame - vh.width()
+        head_w = 10 + 4 + hh.fontMetrics().horizontalAdvance("Me…g 2") + 12    # Farbsymbol + Kurzname
+        min_w = max([t.sizeHintForColumn(c) + 12 for c in range(n)] + [head_w])
+        need = n * min_w
+        if need <= avail:
+            hh.setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        else:
+            hh.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+            for c in range(n):
+                hh.resizeSection(c, min_w)
+        rows_h = sum(vh.sectionSize(r) for r in range(t.rowCount()))
+        scroll_h = t.horizontalScrollBar().sizeHint().height() if need > avail else 0
+        t.setFixedHeight(hh.sizeHint().height() + rows_h + scroll_h + frame)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if e.oldSize().width() != e.size().width() and self.table.isVisible() and self.table.columnCount():
+            self._schedule()

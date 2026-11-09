@@ -745,3 +745,45 @@ def test_dc_offset_does_not_count_as_noise(eng):
     q0 = compute_quality(rec, stim, cfg, ch, 0)
     q1 = compute_quality(rec + 1e-3, stim, cfg, ch, 0)          # −60 dBFS Gleichspannung (USB-Codec)
     assert abs(q1["snr_db"] - q0["snr_db"]) < 1.0
+
+
+def test_compare_table_readable_in_touch_mode():
+    """Tester (0.2.18, Windows + Touch): Zeilenbeschriftungen der Vergleichstabelle abgeschnitten,
+    Spaltenköpfe nur „Messu“/„neu“."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from dataclasses import replace
+    from PySide6 import QtCore, QtWidgets
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    QtCore.QStandardPaths.setTestModeEnabled(True)
+    app.setOrganizationName("datsmess-test-cmp")
+    from datsmess.gui.appearance import appearance
+    from datsmess.gui.params_panel import QuickParams
+    from datsmess.gui.state import AppState
+    old = appearance().current
+    appearance().set(replace(old, touch="touch"))
+    try:
+        state = AppState()
+        panel = QuickParams(state)
+        panel.resize(300, 700)
+        panel.show()
+        state.backend.set_connection("driver")
+        for name in ("Messung 1", "Testtreiber"):
+            m, _ = state.engine.measure_impedance(name)
+            state.add_measurement(m)
+        for m in state.measurements:
+            m.visible = True
+        panel.refresh()
+        t = panel.table
+        assert t.isVisible() and t.columnCount() == 2
+        assert [t.horizontalHeaderItem(c).text() for c in range(2)] == ["Messung 1", "Testtreiber"]
+        vh = t.verticalHeader()
+        need = vh.sectionSizeHint(0) if hasattr(vh, "sectionSizeHint") else 0
+        fm_h = vh.fontMetrics().height()
+        for r in range(t.rowCount()):
+            assert vh.sectionSize(r) >= max(need, fm_h + 8)       # Touch: großer Innenabstand passt
+        rows_h = sum(vh.sectionSize(r) for r in range(t.rowCount()))
+        assert t.height() >= rows_h + t.horizontalHeader().sizeHint().height()
+        panel.close()
+    finally:
+        appearance().set(old)

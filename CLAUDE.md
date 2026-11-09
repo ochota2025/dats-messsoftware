@@ -29,7 +29,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 105 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 106 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -94,7 +94,7 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Installation ist editierbar (`pip install -e .`); das Flag `.venv/datsmess-editable.flag`
   steuert die einmalige Neu-Einbindung nach einem Update.
 
-## Stand und offene Punkte (09.11.2026, Version 0.2.18)
+## Stand und offene Punkte (09.11.2026, Version 0.2.19)
 
 **Läuft:** beim Tester unter Windows mit dem Simulator; Design im Stil des Icons (hell/dunkel),
 Kennwert-Kacheln, ausblendbare Seitenleiste, Qualitäts-Ampel, Geräte-Check, Pegelreihe, Vergleich,
@@ -123,8 +123,26 @@ echten Geräteliste des Testers bestätigt (Testfall in `tests/test_features.py`
   ~30 dB unter Referenz). Pegel −10 dBFS ließe ~6 dB Luft. Default-Pegel nicht ohne Not ändern.
 - Tester hört beim Messen ein „Fiepen/Unterton“ im Chassis – ungeklärt (Windows-Resampling
   44,1→48 kHz? Klangverbesserungen? USB-Störgeräusch?).
-- 2-Ω-Chassis: unsere Werte (fs 78,5 Hz, Re 2,11 Ω, Qts 0,78) laut Tester plausibel zur
-  Original-DATS-Software – genauer Vergleich (.zma im Tab „Vergleich“) steht noch aus.
+- **Vergleich mit Original-DATS 3.1.6** (09.11.2026, 2-Ω-Chassis, Tester importierte .zma + PDF):
+  Kurven praktisch deckungsgleich (1,83 kHz: 4,464 Ω ∠41,4° vs. 4,494 Ω ∠39,1°).
+  | | fs | Re | Qts | Qes | Qms | Le 1k |
+  |---|---|---|---|---|---|---|
+  | DATS (eigene Auswertung) | 76,78 | 2,141 | 0,747 | 0,844 | 6,55 | 0,272 |
+  | wir, DATS-.zma ausgewertet | 76,37 | 2,170 | 0,769 | 0,872 | 6,54 | 0,287 |
+  | wir, eigene Messung (0.2.18) | 78,05 | 2,121 | 0,740 | 0,827 | 7,08 | 0,302 |
+  DATS rechnet ≈ klassisch (Re aus den tiefsten Frequenzen, Zmax, √(Re·Zmax)-Punkte; nachgerechnet
+  mit Re 2,141: Qes 0,839, Qms 6,45) und **Le = Im Z(1 kHz)/ω inkl. Bewegungsanteil** (aus der .zma:
+  0,2715 mH). Unser Le ist nur der Schwingspulen-Zweig des Wright-Fits → systematisch ~5 % höher.
+  Unser Fit auf DATS-Daten: RMS 4,2 %, Modell 200–500 Hz +5 %, 2–3 kHz −4 %, 17 kHz +6 %; Re 1,4 %
+  über dem Realteil bei 2–4 Hz (Fit beginnt erst bei fs/8, darunter steigt der Realteil – Kriechen?).
+  LOG-Kriechmodell (Knudsen) half nicht (4,2 → 4,1 %). DATS-.zma: Sprung +1,8 % bei 1024 Hz (zwei
+  FFT-Bereiche), Treppenstufen unter 10 Hz, Rasterung 1/24 Oktave. fs/Qms der eigenen Messung weichen
+  +1,7 %/+8 % ab – zweite Messung, andere Zeit/Pegel; zum Trennen von Messung und Auswertung fehlt
+  noch unsere Messung als .zma. Ideen (nicht ungefragt): Re-Obergrenze aus Realteil der tiefsten
+  Frequenzen, zusätzlich „Le wie DATS“ anzeigen.
+- Vergleichstabelle unter den Kennwerten: Zeilen fest 20 px + Touch-Innenabstand 8 px → Beschriftung
+  abgeschnitten (0.2.18). Seit 0.2.19 `ResizeToContents`, eigenes knappes Header-Padding, Spalten
+  mit Kurvennamen (ElideMiddle).
 - Tester hatte „Ref.-Widerstand“ von 100 auf 1000 Ω geändert (mit Kalibrierwiderstand verwechselt);
   seit 0.2.18 überschreibt die Kalibrierung das Feld mit dem gemessenen Wert, Beschriftung „(intern)“.
 - **Taskleisten-Anheften unter Windows** (0.2.13): `icon.set_window_relaunch` setzt per
