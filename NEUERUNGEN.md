@@ -1,5 +1,23 @@
 # Neuerungen
 
+## 0.2.18 – 09.11.2026
+
+- **Absturz beim Umschalten auf „Dunkel“ behoben.** Ursache war ein Zusammenspiel von Qt und der
+  Speicherbereinigung von Python: Ein geschlossenes Fenster (Kalibrier-Assistent, Geräte-Check)
+  wurde genau während des Umfärbens gelöscht. Geschlossene Fenster werden jetzt sofort aufgeräumt.
+- **Keine Zacke mehr kurz vor 20 kHz:** Der Mess-Sweep läuft jetzt etwas über 20 kHz hinaus, das
+  Ausblenden am Ende liegt damit außerhalb des Messbereichs. **Bitte einmal neu kalibrieren** –
+  das Programm weist darauf hin.
+- **T/S-Parameter-Tab nicht mehr leer:** Die neueste Treibermessung wird automatisch ausgewählt,
+  fs, Re, Qts, Qes, Qms und Le erscheinen sofort, auch ohne Zweitmessung. Für Vas, Mms und Bl
+  sagt ein Hinweis, welche Messung noch fehlt.
+- **Klarere Begriffe:** Der Kalibrierschritt heißt „Kalibrierwiderstand“ (beim DATS V3 im Gerät
+  eingebaut, bei V1/V2 ein loser 1‑kΩ-Widerstand). Das Feld „Ref.-Widerst. (intern)“ meint den
+  eingebauten Referenzwiderstand. Die Kalibrierung trägt dessen gemessenen Wert (DATS V3: rund
+  94 Ω) jetzt selbst ein.
+- Der Signal-Rausch-Abstand zählt eine Gleichspannung am Eingang nicht mehr als Rauschen. Der
+  Hinweis bei mäßigem S/N sagt jetzt, um wie viel dB sich der Pegel noch erhöhen lässt.
+
 ## 0.2.17 – 09.11.2026
 
 Erste Rückmeldung mit einem echten DATS V3 – danke! Behoben:

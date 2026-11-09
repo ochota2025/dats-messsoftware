@@ -29,7 +29,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 101 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 105 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -94,7 +94,7 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Installation ist editierbar (`pip install -e .`); das Flag `.venv/datsmess-editable.flag`
   steuert die einmalige Neu-Einbindung nach einem Update.
 
-## Stand und offene Punkte (09.11.2026, Version 0.2.17)
+## Stand und offene Punkte (09.11.2026, Version 0.2.18)
 
 **Läuft:** beim Tester unter Windows mit dem Simulator; Design im Stil des Icons (hell/dunkel),
 Kennwert-Kacheln, ausblendbare Seitenleiste, Qualitäts-Ampel, Geräte-Check, Pegelreihe, Vergleich,
@@ -112,8 +112,15 @@ echten Geräteliste des Testers bestätigt (Testfall in `tests/test_features.py`
   `SoundDeviceBackend.play_record` ≥ 1 s länger auf und schneidet latenzbereinigt aus
   (`latency_of`, `align_recording`, `last_latency`). WASAPI scheiterte: Ausgang 48 kHz, Eingang
   44,1 kHz in Windows eingestellt → „Invalid sample rate“ (Tester soll beide gleich stellen).
-- Ein harter Absturz (ohne Traceback im Protokoll) kurz nach der ersten Messung, Ursache offen –
-  seit 0.2.17 steht `absturz.log` (faulthandler) im Fehlerbericht.
+- Harter Absturz beim Umschalten hell/dunkel (access violation in `app.setStyleSheet`): Python-GC
+  löschte geschlossene Assistenten (Referenzzyklen `self.wiz = wiz`), während Qt in
+  `QStyleSheetStyle::repolish` rohe Zeiger hielt und dabei Python (FlowLayout) aufrief. Seit 0.2.18:
+  `apply_palette` mit `gc.collect()` + GC aus, Fusion nur einmal; Assistenten/Dialoge/Kontextmenüs
+  nach `exec()` per `deleteLater()`. **Modale Dialoge mit Python-Zyklen immer so aufräumen.**
+- Sweep-Ende: Ausblendung lag bei 19–20 kHz → Zacke. Seit 0.2.18 `SweepConfig.f_over` (1.1, alte
+  Dicts → 1.0 via `from_dict`, `grid_key` unterscheidet → alte Kalibrierungen ungültig).
+- S/N „mäßig, 34 dB“ beim echten DATS ist physikalisch erklärbar (2-Ω-Chassis an ~94 Ω → Messkanal
+  ~30 dB unter Referenz). Pegel −10 dBFS ließe ~6 dB Luft. Default-Pegel nicht ohne Not ändern.
 - Tester hört beim Messen ein „Fiepen/Unterton“ im Chassis – ungeklärt (Windows-Resampling
   44,1→48 kHz? Klangverbesserungen? USB-Störgeräusch?).
 - 2-Ω-Chassis: unsere Werte (fs 78,5 Hz, Re 2,11 Ω, Qts 0,78) laut Tester plausibel zur

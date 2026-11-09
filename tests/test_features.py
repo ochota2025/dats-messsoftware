@@ -733,3 +733,15 @@ def test_sweep_overshoot_keeps_band_edge_clean():
     assert old.f_over == 1.0 and old.grid_key() != new.grid_key()      # alte Kalibrierung → neu kalibrieren
     assert np.array_equal(old.frequencies(), new.frequencies())          # gleicher Messbereich
     assert edge_error(old) > 0.1 and edge_error(new) < 0.03
+
+
+def test_dc_offset_does_not_count_as_noise(eng):
+    from datsmess.analysis.quality import compute_quality
+    e, sim = eng
+    sim.set_connection("driver")
+    cfg, ch = e.sweep, e.channels
+    rec = e.record(cfg)
+    stim = make_stimulus(cfg)
+    q0 = compute_quality(rec, stim, cfg, ch, 0)
+    q1 = compute_quality(rec + 1e-3, stim, cfg, ch, 0)          # −60 dBFS Gleichspannung (USB-Codec)
+    assert abs(q1["snr_db"] - q0["snr_db"]) < 1.0

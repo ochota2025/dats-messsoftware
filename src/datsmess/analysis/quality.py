@@ -63,7 +63,11 @@ def compute_quality(recordings: np.ndarray, stimulus: np.ndarray, cfg, ch, laten
     s1 = min(n, s0 + cfg.sweep_samples)
     guard = int(0.02 * cfg.fs)
     noise = meas[min(n, s1 + guard):]
-    sig_meas = _rms(meas[s0:s1])
+    # Gleichspannungsanteil des Wandlers (USB-Codecs: oft −60 … −80 dBFS) ist kein Rauschen –
+    # er wirkt nur auf 0 Hz und würde den Signal-Rausch-Abstand sonst künstlich begrenzen.
+    dc = float(np.mean(noise)) if len(noise) else 0.0
+    noise = noise - dc
+    sig_meas = _rms(meas[s0:s1] - dc)
     noise_rms = _rms(noise) if len(noise) >= 1024 else None
     q = {
         "peak_meas_db": db(peak_meas),
@@ -112,10 +116,14 @@ def grade(q: dict | None, context: str = "dut") -> tuple[str, list[str]]:
             bad.append("Kaum Signal am Messkanal – Klemmen und Verbindung prüfen.")
         else:
             snr = q.get("snr_db")
+            room = -3.0 - peak_max                  # Luft bis −3 dBFS Spitze
+            more = (f"Pegel um etwa {room:.0f} dB erhöhen (Spitze jetzt {peak_max:.0f} dBFS)"
+                    if room >= 3 and not q.get("clipped") else "mehr Pegel")
             if snr is not None and snr < 20:
-                bad.append(f"Signal-Rausch-Abstand nur {snr:.0f} dB – Pegel erhöhen, mitteln, Störquellen prüfen.")
+                bad.append(f"Signal-Rausch-Abstand nur {snr:.0f} dB – {more}, mitteln, Störquellen prüfen.")
             elif snr is not None and snr < 40:
-                warn.append(f"Signal-Rausch-Abstand {snr:.0f} dB – mehr Pegel oder Mittelungen verbessern das Ergebnis.")
+                warn.append(f"Signal-Rausch-Abstand {snr:.0f} dB – {more} oder mitteln "
+                            "(4 Mittelungen = +6 dB) verbessert das Ergebnis.")
     hum = q.get("hum")
     if hum and (q.get("snr_db") or 99) < 60:
         warn.append(f"Brummen ({hum['hz']} Hz) im Rauschen – Masseschleife? Laptop vom Netzteil trennen "
