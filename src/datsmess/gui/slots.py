@@ -113,6 +113,7 @@ class SlotBar(QtWidgets.QWidget):
             menu.addAction("Exportieren …", lambda: self.exportSlot.emit(i))
             menu.addAction("Platz leeren", lambda: self.state.clear_slot(i))
         menu.exec(QtGui.QCursor.pos())
+        menu.deleteLater()
 
     def _rename(self, i: int):
         m = self.state.slot_measurement(i)

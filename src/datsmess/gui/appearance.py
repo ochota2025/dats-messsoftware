@@ -6,6 +6,7 @@ passen sich daraufhin sofort an.
 """
 from __future__ import annotations
 
+import gc
 import json
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -198,13 +199,6 @@ class Appearance:
 def apply_palette(app: QtWidgets.QApplication, ap: "Appearance") -> None:
     """Feste Qt-Palette – unabhängig vom Dunkelmodus des Betriebssystems."""
     dark = ap.dark
-    hints = app.styleHints()
-    if hasattr(hints, "setColorScheme"):           # Qt ≥ 6.8
-        try:
-            hints.setColorScheme(QtCore.Qt.ColorScheme.Dark if dark else QtCore.Qt.ColorScheme.Light)
-        except Exception:                           # noqa: BLE001
-            pass
-    app.setStyle("Fusion")
     P, C = QtGui.QPalette, QtGui.QColor
     if dark:
         colors = {
@@ -231,12 +225,37 @@ def apply_palette(app: QtWidgets.QApplication, ap: "Appearance") -> None:
         pal.setColor(P.Disabled, role, C(disabled[0]))
     pal.setColor(P.Disabled, P.Base, C(disabled[1]))
     pal.setColor(P.Disabled, P.Button, C(disabled[2]))
-    app.setPalette(pal)
-    app.setStyleSheet(stylesheet(ap))
-    # Stylesheets mit palette(...)-Verweisen neu auswerten
-    for w in app.allWidgets():
-        if w.styleSheet():
-            w.setStyleSheet(w.styleSheet())
+    sheet = stylesheet(ap)
+    # Beim Umstylen hält Qt rohe Zeiger auf alle Widgets (QStyleSheetStyle::repolish) und ruft dabei
+    # Python auf (FlowLayout, pyqtgraph …). Räumt der Garbage-Collector genau dann ein geschlossenes
+    # Fenster (Kalibrier-Assistent, Geräte-Check) ab, greift Qt auf freigegebenen Speicher zu – so ist
+    # das Programm beim Tester beim Umschalten auf „Dunkel“ abgestürzt. Deshalb vorher aufräumen und
+    # den Garbage-Collector währenddessen anhalten.
+    gc.collect()
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        hints = app.styleHints()
+        if hasattr(hints, "setColorScheme"):           # Qt ≥ 6.8
+            scheme = QtCore.Qt.ColorScheme.Dark if dark else QtCore.Qt.ColorScheme.Light
+            try:
+                if hints.colorScheme() != scheme:
+                    hints.setColorScheme(scheme)
+            except Exception:                           # noqa: BLE001
+                pass
+        if not app.property("datsmess_fusion"):         # nur einmal: setStyle löscht den alten Stil
+            app.setStyle("Fusion")                      # und poliert alle Widgets ein weiteres Mal
+            app.setProperty("datsmess_fusion", True)
+        app.setPalette(pal)
+        if app.styleSheet() != sheet:
+            app.setStyleSheet(sheet)
+        for w in app.allWidgets():                      # palette(...)-Verweise neu auswerten
+            ss = w.styleSheet()
+            if "palette(" in ss:
+                w.setStyleSheet(ss)
+    finally:
+        if was_enabled:
+            gc.enable()
 
 
 RESOURCES = Path(__file__).resolve().parents[1] / "resources"

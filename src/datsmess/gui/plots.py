@@ -311,6 +311,7 @@ class ImpedancePlot(QtWidgets.QWidget):
         menu.addSeparator()
         menu.addAction("Diagramm als Bild speichern …", self.save_image)
         menu.exec(pos)
+        menu.deleteLater()          # sonst bleibt jedes Kontextmenü als verstecktes Kind bestehen
 
     def auto_range(self):
         self.top.enableAutoRange()

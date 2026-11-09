@@ -679,7 +679,9 @@ class MainWindow(QtWidgets.QMainWindow):
         return ctx
 
     def show_report(self):
-        errors.ReportDialog(self, "Fehlerbericht", "<b>Fehlerbericht für Rückmeldungen</b>").exec()
+        dlg = errors.ReportDialog(self, "Fehlerbericht", "<b>Fehlerbericht für Rückmeldungen</b>")
+        dlg.exec()
+        dlg.deleteLater()
 
     def _open_log_folder(self):
         p = diagnostics.log_path()
@@ -1035,24 +1037,35 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         r_cal = float(self.settings.value("r_cal", 1000.0))
         wiz = CalibrationWizard(self.state, self, r_cal_default=r_cal)
-        if wiz.exec() == QtWidgets.QDialog.Accepted:
-            self.settings.setValue("r_cal", wiz.intro.r_cal.value())
-            cal = self.state.engine.calibration
-            if cal is not None:     # gemessenen Referenzwiderstand übernehmen (gilt für unkalibrierte Messungen)
-                try:
-                    i1k = int(np.argmin(np.abs(cal.f - 1000)))
-                    r = float(abs(cal.r_s[i1k]))
-                    if 0.5 < r < 1e5:
-                        self.r_nom.setValue(round(r, 2))
-                except (AttributeError, ValueError, IndexError):
-                    pass
+        try:
+            if wiz.exec() == QtWidgets.QDialog.Accepted:
+                self._calibration_accepted(wiz)
+        finally:
+            wiz.deleteLater()       # gezielt löschen – nicht irgendwann durch den Garbage-Collector (Absturz!)
+
+    def _calibration_accepted(self, wiz):
+        self.settings.setValue("r_cal", wiz.intro.r_cal.value())
+        cal = self.state.engine.calibration
+        if cal is not None:     # gemessenen Referenzwiderstand übernehmen (gilt für unkalibrierte Messungen)
+            try:
+                i1k = int(np.argmin(np.abs(cal.f - 1000)))
+                r = float(abs(cal.r_s[i1k]))
+                if 0.5 < r < 1e5:
+                    self.r_nom.setValue(round(r, 2))
+            except (AttributeError, ValueError, IndexError):
+                pass
 
     def open_device_check(self):
         if self.state.busy:
             return
         wiz = DeviceCheckWizard(self.state, self)
-        if wiz.exec() != QtWidgets.QDialog.Accepted:
-            return
+        try:
+            if wiz.exec() == QtWidgets.QDialog.Accepted:
+                self._device_check_accepted(wiz)
+        finally:
+            wiz.deleteLater()
+
+    def _device_check_accepted(self, wiz):
         if wiz.report:
             self.settings.setValue("last_device_check", wiz.report)
             log.info("Geräte-Check: %s", wiz.report.replace("\n", " | "))

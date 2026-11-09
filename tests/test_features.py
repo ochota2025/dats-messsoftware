@@ -669,3 +669,39 @@ def test_ts_tab_preselects_new_measurement():
     state.add_measurement(m)
     assert tab.cb_free.currentData() is m
     assert tab.table.rowCount() > 0 and "Zweitmessung" in tab.warn.text()
+
+
+def test_closed_wizards_are_deleted_and_theme_switch_keeps_gc(tmp_path):
+    """Tester (09.11.2026): Absturz beim Umschalten auf „Dunkel“ – der Garbage-Collector löschte einen
+    geschlossenen Assistenten, während Qt in setStyleSheet rohe Zeiger auf dessen Widgets hielt."""
+    import gc
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    os.environ["DATSMESS_NO_UPDATE_CHECK"] = "1"
+    from dataclasses import replace
+    from PySide6 import QtCore, QtWidgets
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    QtCore.QStandardPaths.setTestModeEnabled(True)
+    app.setOrganizationName("datsmess-test-theme")
+    from datsmess.gui.appearance import appearance
+    from datsmess.gui.main_window import MainWindow
+    w = MainWindow()
+
+    def close_modal():
+        d = app.activeModalWidget()
+        if d is not None:
+            d.reject()
+        else:
+            QtCore.QTimer.singleShot(50, close_modal)
+    for fn in (w.open_calibration, w.open_device_check):
+        QtCore.QTimer.singleShot(50, close_modal)
+        fn()
+    QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+    assert not [x for x in app.allWidgets() if isinstance(x, QtWidgets.QWizard)]
+    cur = appearance().current
+    for theme in ("dark", "light"):
+        appearance().set(replace(cur, theme=theme))
+        assert gc.isenabled()
+    w.state.dirty = False
+    w.close()
+    w.deleteLater()
