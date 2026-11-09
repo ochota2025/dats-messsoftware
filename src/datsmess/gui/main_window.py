@@ -1022,8 +1022,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if cal is None:
             txt, col = "Nicht kalibriert – Messwerte sind nur Schätzungen.", appearance().current.err
         elif not cal.is_compatible(eng.sweep):
-            txt, col = ("Kalibrierung passt nicht zu Abtastrate/Sweep-Länge "
-                        f"({cal.sweep.fs / 1000:g} kHz, 2^{cal.sweep.sweep_exp}) – bitte neu kalibrieren."), appearance().current.warn
+            if (cal.sweep.fs, cal.sweep.sweep_exp) == (eng.sweep.fs, eng.sweep.sweep_exp):
+                txt = ("Kalibrierung stammt von einer älteren Programmversion (anderer Mess-Sweep) – "
+                       "bitte neu kalibrieren.")
+            else:
+                txt = ("Kalibrierung passt nicht zu Abtastrate/Sweep-Länge "
+                       f"({cal.sweep.fs / 1000:g} kHz, 2^{cal.sweep.sweep_exp}) – bitte neu kalibrieren.")
+            col = appearance().current.warn
         else:
             lr = cal.lead_resistance()
             txt = f"✔ Kalibriert ({', '.join(cal.steps)})<br>{cal.created.replace('T', ' ')}"

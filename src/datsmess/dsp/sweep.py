@@ -27,6 +27,10 @@ class SweepConfig:
     pre_s: float = 0.05
     post_s: float = 0.30
     averages: int = 1
+    # Anregung über f_stop hinaus (bis höchstens 0,48·fs): Die Ausblendung am Sweep-Ende liegt dann
+    # oberhalb des Messbereichs, sonst gibt es knapp unter f_stop eine Zacke (DATS V3, 0.2.17).
+    # Ältere gespeicherte Sweeps ohne dieses Feld laufen weiter mit 1.0 (siehe from_dict).
+    f_over: float = 1.1
 
     # -- abgeleitete Größen -------------------------------------------------
     @property
@@ -54,6 +58,11 @@ class SweepConfig:
         return min(self.f_stop, 0.48 * self.fs)
 
     @property
+    def sweep_f_stop(self) -> float:
+        """Endfrequenz des abgespielten Sweeps (≥ Ende des Messbereichs)."""
+        return max(self.effective_f_stop, min(self.f_stop * self.f_over, 0.48 * self.fs))
+
+    @property
     def duration_s(self) -> float:
         return self.total_samples / self.fs
 
@@ -69,8 +78,10 @@ class SweepConfig:
         return self.fft_frequencies()[self.band_mask()]
 
     def grid_key(self) -> tuple:
-        return (self.fs, self.sweep_exp, self.pre_samples, self.post_samples,
-                round(self.f_start, 6), round(self.effective_f_stop, 6))
+        key = (self.fs, self.sweep_exp, self.pre_samples, self.post_samples,
+               round(self.f_start, 6), round(self.effective_f_stop, 6))
+        # anderer Stimulus → alte Kalibrierungen (Sweep ohne Überlauf) passen nicht mehr
+        return key if self.f_over == 1.0 else key + (round(self.sweep_f_stop, 3),)
 
     def with_(self, **kw) -> "SweepConfig":
         return replace(self, **kw)
@@ -81,6 +92,7 @@ class SweepConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "SweepConfig":
         fields = {k: d[k] for k in cls.__dataclass_fields__ if k in d}
+        fields.setdefault("f_over", 1.0)        # vor 0.2.18 gespeichert: Sweep endete bei f_stop
         return cls(**fields)
 
 
@@ -99,7 +111,7 @@ def exp_sweep(f1: float, f2: float, n: int, fs: int, fade_in: float = 0.01, fade
 
 def make_stimulus(cfg: SweepConfig) -> np.ndarray:
     """Komplettes Wiedergabesignal inkl. Vor- und Nachlauf (Stille)."""
-    sweep = exp_sweep(cfg.f_start, cfg.effective_f_stop, cfg.sweep_samples, cfg.fs)
+    sweep = exp_sweep(cfg.f_start, cfg.sweep_f_stop, cfg.sweep_samples, cfg.fs)
     out = np.zeros(cfg.total_samples)
     out[cfg.pre_samples:cfg.pre_samples + cfg.sweep_samples] = sweep * db_to_lin(cfg.level_dbfs)
     return out

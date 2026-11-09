@@ -705,3 +705,31 @@ def test_closed_wizards_are_deleted_and_theme_switch_keeps_gc(tmp_path):
     w.state.dirty = False
     w.close()
     w.deleteLater()
+
+
+def test_sweep_overshoot_keeps_band_edge_clean():
+    """Tester (09.11.2026): Zacke knapp unter 20 kHz – die Ausblendung am Sweep-Ende lag im Messbereich."""
+    import scipy.signal as ss
+    from datsmess.dsp.calibration import nominal_impedance
+    from datsmess.measurement import transfer_from_recordings
+    fs = 44100
+    sim = SimulatorBackend()
+    sim.set_connection("driver")
+    b, a = ss.ellip(10, 0.05, 90, 20600 / (fs / 2))         # Tiefpass wie im USB-Codec
+    rng = np.random.default_rng(0)
+
+    def edge_error(cfg):
+        rec = ss.lfilter(b, a, sim.play_record(make_stimulus(cfg), fs), axis=0)
+        noisy = rec + 10 ** (-77 / 20) * rng.standard_normal(rec.shape)
+        ch = ChannelConfig()
+        Z = nominal_impedance(transfer_from_recordings(noisy[None], cfg, ch).H, 100)
+        Z0 = nominal_impedance(transfer_from_recordings(rec[None], cfg, ch).H, 100)
+        f = cfg.frequencies()
+        m = f > 19700
+        return float(np.median(np.abs(Z[m] - Z0[m]) / np.abs(Z0[m])))
+
+    new = SweepConfig(fs=fs)
+    old = SweepConfig.from_dict({k: v for k, v in new.to_dict().items() if k != "f_over"})
+    assert old.f_over == 1.0 and old.grid_key() != new.grid_key()      # alte Kalibrierung → neu kalibrieren
+    assert np.array_equal(old.frequencies(), new.frequencies())          # gleicher Messbereich
+    assert edge_error(old) > 0.1 and edge_error(new) < 0.03
