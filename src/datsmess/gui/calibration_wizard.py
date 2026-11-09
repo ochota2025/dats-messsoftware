@@ -20,7 +20,8 @@ STEPS = {
               "der Messleitungen ermittelt und später herausgerechnet."),
     "cal": ("Schritt: Kalibrierwiderstand",
             "Die Krokodilklemmen an die beiden <b>Messpunkte des internen Kalibrierwiderstands</b> "
-            "am Gehäuse des DATS anschließen.<br><br>Damit wird der wirksame Referenzwiderstand "
+            "am Gehäuse des DATS anschließen (beim DATS V1/V2: an den mitgelieferten losen "
+            "1-kΩ-Widerstand).<br><br>Damit wird der wirksame Referenzwiderstand "
             "der Messbrücke frequenzabhängig bestimmt."),
 }
 PAGE_IDS = {"intro": 0, "open": 1, "short": 2, "cal": 3, "result": 4}

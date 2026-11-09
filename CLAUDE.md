@@ -105,7 +105,8 @@ echten Geräteliste des Testers bestätigt (Testfall in `tests/test_features.py`
 **Echtes DATS V3 – erster Test (09.11.2026, Windows 11, 0.2.16):**
 - Meldet sich als „USB AUDIO  CODEC“ (zwei Leerzeichen; „Lautsprecher (…)“ + „Line (…)“) – kein
   „DATS“ im Namen, wird über `dats_keys` gemerkt. **Referenz = Eingang 2, Messung = Eingang 1**
-  (also „Eingangskanäle tauschen“ an). Wirksamer Referenzwiderstand ≈ 94 Ω (R_cal 1 kΩ: Verhältnis
+  (also „Eingangskanäle tauschen“ an). Kalibrierwiderstand (1 kΩ) ist beim V3 **im Gerät verbaut**
+  (zwei Klemmen am Gehäuse); bei V1/V2 ein loser 1-kΩ-Widerstand. Wirksamer Referenzwiderstand ≈ 94 Ω (R_cal 1 kΩ: Verhältnis
   10,66). Kurzschluss: Messkanal −44 dB, Leitungswiderstand ~0,6 Ω.
 - DirectSound: **Latenz 537 ms** → das Sweep-Ende fehlte (Müll ab ~9 kHz). Seit 0.2.17 nimmt
   `SoundDeviceBackend.play_record` ≥ 1 s länger auf und schneidet latenzbereinigt aus
@@ -115,7 +116,10 @@ echten Geräteliste des Testers bestätigt (Testfall in `tests/test_features.py`
   seit 0.2.17 steht `absturz.log` (faulthandler) im Fehlerbericht.
 - Tester hört beim Messen ein „Fiepen/Unterton“ im Chassis – ungeklärt (Windows-Resampling
   44,1→48 kHz? Klangverbesserungen? USB-Störgeräusch?).
-- Noch offen: Vergleich mit der Original-Software (.zma) im Tab „Vergleich“, bekannter Widerstand.
+- 2-Ω-Chassis: unsere Werte (fs 78,5 Hz, Re 2,11 Ω, Qts 0,78) laut Tester plausibel zur
+  Original-DATS-Software – genauer Vergleich (.zma im Tab „Vergleich“) steht noch aus.
+- Tester hatte „Ref.-Widerstand“ von 100 auf 1000 Ω geändert (mit Kalibrierwiderstand verwechselt);
+  seit 0.2.18 überschreibt die Kalibrierung das Feld mit dem gemessenen Wert, Beschriftung „(intern)“.
 - **Taskleisten-Anheften unter Windows** (0.2.13): `icon.set_window_relaunch` setzt per
   `SHGetPropertyStoreForWindow` RelaunchCommand/-Icon/-Name + AppUserModelID am Hauptfenster –
   nur per Code geprüft. Alte Pins müssen einmal gelöst und neu angeheftet werden.

@@ -473,7 +473,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.r_nom.setValue(100.0)
         self.r_nom.setToolTip("Referenzwiderstand im DATS (eingebaut, beim DATS V3 rund 94 Ω). Nur relevant für unkalibrierte "
                               "Messungen und für die Ein-Punkt-Kalibrierung. Die Kalibrierung trägt den gemessenen Wert ein.")
-        f.addRow("Ref.-Widerstand:", self.r_nom)
+        f.addRow("Ref.-Widerst. (intern):", self.r_nom)
         lay.addWidget(g_hw)
 
         self.g_sim = QtWidgets.QGroupBox("Simulator")
