@@ -8,6 +8,7 @@ import threading
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import __version__, diagnostics, selfupdate, updates
@@ -470,8 +471,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.r_nom.setDecimals(2)
         self.r_nom.setSuffix(" Ω")
         self.r_nom.setValue(100.0)
-        self.r_nom.setToolTip("Nennwert des internen Referenzwiderstands. Nur relevant für unkalibrierte "
-                              "Messungen und für die Ein-Punkt-Kalibrierung. Der Geräte-Check kann ihn bestimmen.")
+        self.r_nom.setToolTip("Referenzwiderstand im DATS (eingebaut, beim DATS V3 rund 94 Ω). Nur relevant für unkalibrierte "
+                              "Messungen und für die Ein-Punkt-Kalibrierung. Die Kalibrierung trägt den gemessenen Wert ein.")
         f.addRow("Ref.-Widerstand:", self.r_nom)
         lay.addWidget(g_hw)
 
@@ -1036,6 +1037,15 @@ class MainWindow(QtWidgets.QMainWindow):
         wiz = CalibrationWizard(self.state, self, r_cal_default=r_cal)
         if wiz.exec() == QtWidgets.QDialog.Accepted:
             self.settings.setValue("r_cal", wiz.intro.r_cal.value())
+            cal = self.state.engine.calibration
+            if cal is not None:     # gemessenen Referenzwiderstand übernehmen (gilt für unkalibrierte Messungen)
+                try:
+                    i1k = int(np.argmin(np.abs(cal.f - 1000)))
+                    r = float(abs(cal.r_s[i1k]))
+                    if 0.5 < r < 1e5:
+                        self.r_nom.setValue(round(r, 2))
+                except (AttributeError, ValueError, IndexError):
+                    pass
 
     def open_device_check(self):
         if self.state.busy:

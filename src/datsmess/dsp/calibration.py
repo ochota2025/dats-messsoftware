@@ -82,7 +82,7 @@ class Calibration:
             s.append("Leerlauf")
         if self.H_short is not None:
             s.append("Kurzschluss")
-        s.append("Referenzwiderstand")
+        s.append("Kalibrierwiderstand")
         return s
 
     def is_compatible(self, sweep: SweepConfig) -> bool:

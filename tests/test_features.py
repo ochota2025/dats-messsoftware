@@ -651,3 +651,21 @@ def test_quick_parameters_ignore_noisy_treble(eng):
     clean, noisy = quick_parameters(m.f, m.Z), quick_parameters(m.f, Z)
     assert clean is not None and noisy is not None
     assert abs(noisy.fs / clean.fs - 1) < 0.02 and abs(noisy.Re / clean.Re - 1) < 0.02
+
+
+def test_ts_tab_preselects_new_measurement():
+    """Tester (09.11.2026): Messung vom großen Mess-Knopf erschien im T/S-Tab nicht."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6 import QtWidgets
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])  # noqa: F841
+    from datsmess.gui.state import AppState
+    from datsmess.gui.ts_tab import TSTab
+    state = AppState()
+    tab = TSTab(state)
+    sim = state.backend
+    sim.set_connection("driver")
+    m, _ = state.engine.measure_impedance("Messung 1")
+    state.add_measurement(m)
+    assert tab.cb_free.currentData() is m
+    assert tab.table.rowCount() > 0 and "Zweitmessung" in tab.warn.text()

@@ -5,7 +5,7 @@ import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..analysis.ts import (NEEDS_SECOND_MEASUREMENT, VAS_METHOD_LABELS, VasMethod, derive_ts,
-                           fit_driver, sd_from_diameter)
+                           fit_driver, looks_like_driver, sd_from_diameter)
 from .. import __version__
 from ..io.formats import export_parameters
 from ..io.ts_export import PROFILES, profile_text, save_text, tsp_text
@@ -203,12 +203,39 @@ class TSTab(QtWidgets.QWidget):
         state.busyChanged.connect(lambda b: [w.setEnabled(not b) for w in (self.btn_free, self.btn_second)])
         state.projectLoaded.connect(self._restore)
         state.measurementsChanged.connect(self._refresh_plot)
+        # Messungen aus dem großen Mess-Knopf landen sonst unausgewählt in der Liste, und der Tab
+        # bleibt leer (Tester, 09.11.2026): neueste Treibermessung vorwählen und gleich rechnen.
+        state.measurementsChanged.connect(self._auto_select)
+        self.cb_free.currentIndexChanged.connect(self._selection_changed)
+        self.cb_second.currentIndexChanged.connect(self._selection_changed)
+        self.method.currentIndexChanged.connect(self._selection_changed)
+        self.f_hi.currentIndexChanged.connect(self._selection_changed)
+        self._auto_select()
         state.ts_text_provider = self.tsp_for
         self._set_sd(sd_from_diameter(0.13) * 1e4)
         self._update_fields()
         self._profile_hint()
 
     # ------------------------------------------------------------------
+    def _auto_select(self):
+        if self.cb_free.currentData() is not None:
+            return
+        second = self.cb_second.currentData()
+        for m in reversed(self.state.measurements):
+            if m is second or m.name.startswith(("Zusatzmasse", "Testbox")):
+                continue
+            try:
+                ok = looks_like_driver(m.f, m.Z)
+            except Exception:       # noqa: BLE001 – Vorauswahl darf nie stören
+                ok = False
+            if ok:
+                self.cb_free.select(m)      # löst _selection_changed → Berechnung aus
+                return
+
+    def _selection_changed(self, *_):
+        if self.cb_free.currentData() is not None:
+            self.calculate(silent=True)
+
     def _set_sd(self, v):
         self.sd.blockSignals(True)
         self.sd.setValue(v)
@@ -300,9 +327,10 @@ class TSTab(QtWidgets.QWidget):
             return
         meth = self._method()
         second = self.cb_second.currentData() if meth in NEEDS_SECOND_MEASUREMENT else None
-        if meth in NEEDS_SECOND_MEASUREMENT and second is None:
-            info("Für diese Methode wird eine Zweitmessung benötigt.")
-            return
+        missing_second = meth in NEEDS_SECOND_MEASUREMENT and second is None
+        if missing_second:
+            # Elektrische Werte (fs, Re, Q …) gehen schon mit der Freiluftmessung – nicht leer lassen.
+            meth = VasMethod.NONE
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
             re_dc = self.re_value.value() if self.re_override.isChecked() else None
@@ -330,6 +358,10 @@ class TSTab(QtWidgets.QWidget):
         self._free = free
         self._second = second
         free.meta["Re"] = fit1.Re          # R_e verlustfrei an der Messung (ZMA-Kopf, Watch-Folder)
+        if missing_second:
+            row = self.lbl_second.text().rstrip(": ")
+            ts.warnings.insert(0, f"Nur elektrische Parameter: Für Vas, Mms, Bl … fehlt noch die Zweitmessung "
+                                  f"– links bei „{row}“ auf „Messen“ klicken oder eine Messung auswählen.")
         self._show(ts, free, second)
         self.state.set_ts_state({
             "inputs": self._inputs(), "free_id": free.id, "second_id": second.id if second else None,

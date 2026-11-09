@@ -151,14 +151,14 @@ class ResultPage(QtWidgets.QWizardPage):
         rs = cal.r_s[i1k]
         k = cal.k[i1k]
         lines = [f"<b>Schritte:</b> {', '.join(cal.steps)}",
-                 f"<b>Wirksamer Referenzwiderstand @ 1 kHz:</b> {abs(rs):.3f} Ω ∠ {np.degrees(np.angle(rs)):+.2f}°",
+                 f"<b>Referenzwiderstand im DATS (gemessen) @ 1 kHz:</b> {abs(rs):.3f} Ω ∠ {np.degrees(np.angle(rs)):+.2f}°",
                  f"<b>Kanalverhältnis @ 1 kHz:</b> {abs(k):.4f} ∠ {np.degrees(np.angle(k)):+.2f}°"]
         lr = cal.lead_resistance()
         if lr is not None:
             lines.append(f"<b>Kabel-/Übergangswiderstand:</b> {lr * 1000:.1f} mΩ")
             if lr > 0.5:
-                lines.append(f"<span style='color:{appearance().current.warn}'>Ungewöhnlich hoher Leitungswiderstand – "
-                             "Klemmen beim Kurzschluss prüfen.</span>")
+                lines.append(f"<span style='color:{appearance().current.warn}'>Recht hoher Leitungswiderstand – "
+                             "sitzen die Klemmen beim Kurzschluss fest? Er wird aber herausgerechnet.</span>")
         band = (f > 20) & (f < 10000)
         spread = np.ptp(np.abs(cal.r_s[band])) / np.median(np.abs(cal.r_s[band]))
         lines.append(f"<b>Schwankung Referenzwiderstand 20 Hz–10 kHz:</b> {spread * 100:.2f} %")
