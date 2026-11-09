@@ -284,8 +284,12 @@ class ResultPage(QtWidgets.QWizardPage):
                 pass
             if q_open:
                 g, msgs = grade(q_open, "open")
-                lines.append(f"Signalqualität (Leerlauf): Latenz {q_open.get('latency_ms')} ms, "
-                             f"Rauschen {q_open.get('noise_db') or float('nan'):.0f} dBFS"
+                lat = getattr(w.state.backend, "last_latency", None)
+                lat_ms = (f"{1000.0 * lat / w.engine().sweep.fs:.0f} ms (wird ausgeglichen)" if lat is not None
+                          else f"{q_open.get('latency_ms')} ms")
+                noise = q_open.get("noise_db")
+                lines.append(f"Signalqualität (Leerlauf): Latenz {lat_ms}, "
+                             f"Rauschen {'–' if noise is None else f'{noise:.0f}'} dBFS"
                              + ("" if not msgs else " – " + msgs[0]))
                 report.append(lines[-1])
         lines.append("<br>Nächster Schritt: <b>Kalibrier-Assistent</b> (Leerlauf, Kurzschluss, "

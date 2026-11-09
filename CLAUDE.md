@@ -29,7 +29,7 @@ Dayton Audio DATS V3 (Python 3.12, PySide6-Essentials, pyqtgraph, NumPy/SciPy, s
 ## Prüfen vor jedem Commit
 
 ```bash
-.venv/bin/python -m pytest -q          # muss grün sein (derzeit 97 Tests)
+.venv/bin/python -m pytest -q          # muss grün sein (derzeit 101 Tests)
 ```
 
 GUI-Änderungen zusätzlich offscreen durchspielen und per Screenshot ansehen:
@@ -94,7 +94,7 @@ Ohne Hardware immer mit dem Simulator (`audio/simulator.py`) testen; die GUI sch
 - Installation ist editierbar (`pip install -e .`); das Flag `.venv/datsmess-editable.flag`
   steuert die einmalige Neu-Einbindung nach einem Update.
 
-## Stand und offene Punkte (08.11.2026, Version 0.2.16)
+## Stand und offene Punkte (09.11.2026, Version 0.2.17)
 
 **Läuft:** beim Tester unter Windows mit dem Simulator; Design im Stil des Icons (hell/dunkel),
 Kennwert-Kacheln, ausblendbare Seitenleiste, Qualitäts-Ampel, Geräte-Check, Pegelreihe, Vergleich,
@@ -102,11 +102,20 @@ Korrektur, Klirr & Rub/Buzz, Oszilloskop, Datenblatt mit Kommentar, Fehlerberich
 Selbst-Update mit Fortschrittsfenster. Geräteerkennung und Ein-/Aussteck-Überwachung sind mit der
 echten Geräteliste des Testers bestätigt (Testfall in `tests/test_features.py`).
 
-**Noch nie getestet / unbestätigt:**
-- **Echtes DATS V3** – Gerätename unter Windows, Kanalzuordnung, Kalibrierwiderstand, WASAPI vs. MME,
-  Messgenauigkeit. Plan dafür: Geräte-Check → Kalibrierung → bekannten Widerstand messen →
-  denselben Treiber mit Original-Software (Export .zma) und unserer messen, im Tab „Vergleich“
-  übereinanderlegen.
+**Echtes DATS V3 – erster Test (09.11.2026, Windows 11, 0.2.16):**
+- Meldet sich als „USB AUDIO  CODEC“ (zwei Leerzeichen; „Lautsprecher (…)“ + „Line (…)“) – kein
+  „DATS“ im Namen, wird über `dats_keys` gemerkt. **Referenz = Eingang 2, Messung = Eingang 1**
+  (also „Eingangskanäle tauschen“ an). Wirksamer Referenzwiderstand ≈ 94 Ω (R_cal 1 kΩ: Verhältnis
+  10,66). Kurzschluss: Messkanal −44 dB, Leitungswiderstand ~0,6 Ω.
+- DirectSound: **Latenz 537 ms** → das Sweep-Ende fehlte (Müll ab ~9 kHz). Seit 0.2.17 nimmt
+  `SoundDeviceBackend.play_record` ≥ 1 s länger auf und schneidet latenzbereinigt aus
+  (`latency_of`, `align_recording`, `last_latency`). WASAPI scheiterte: Ausgang 48 kHz, Eingang
+  44,1 kHz in Windows eingestellt → „Invalid sample rate“ (Tester soll beide gleich stellen).
+- Ein harter Absturz (ohne Traceback im Protokoll) kurz nach der ersten Messung, Ursache offen –
+  seit 0.2.17 steht `absturz.log` (faulthandler) im Fehlerbericht.
+- Tester hört beim Messen ein „Fiepen/Unterton“ im Chassis – ungeklärt (Windows-Resampling
+  44,1→48 kHz? Klangverbesserungen? USB-Störgeräusch?).
+- Noch offen: Vergleich mit der Original-Software (.zma) im Tab „Vergleich“, bekannter Widerstand.
 - **Taskleisten-Anheften unter Windows** (0.2.13): `icon.set_window_relaunch` setzt per
   `SHGetPropertyStoreForWindow` RelaunchCommand/-Icon/-Name + AppUserModelID am Hauptfenster –
   nur per Code geprüft. Alte Pins müssen einmal gelöst und neu angeheftet werden.

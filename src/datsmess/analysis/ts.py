@@ -193,11 +193,16 @@ def quick_parameters(f: np.ndarray, Z: np.ndarray, max_error: float = 0.15) -> I
     ``None``, wenn die Kurve nicht nach einem Lautsprecher aussieht."""
     if not looks_like_driver(f, Z):
         return None
-    try:
-        fit = fit_driver(f, Z)
-    except (ValueError, RuntimeError, FloatingPointError):
-        return None
-    return fit if fit.rms_error <= max_error else None
+    # Erst der ganze Bereich; passt das Modell nicht, ohne die Höhen – dort stören am ehesten
+    # Rauschen, Einstreuung oder ein gestörter Messkanal (sonst bliebe eine klare Resonanz ohne Werte).
+    for f_hi in (20000.0, 5000.0):
+        try:
+            fit = fit_driver(f, Z, f_hi=f_hi)
+        except (ValueError, RuntimeError, FloatingPointError):
+            continue
+        if fit.rms_error <= max_error:
+            return fit
+    return None
 
 
 # --------------------------------------------------------------------------

@@ -80,7 +80,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         (self.compare_tab, "Vergleich"), (self.corr_tab, "Korrektur"),
                         (self.dist_tab, "Klirr && Rub/Buzz"), (self.lcr_tab, "Bauteile (LCR)"),
                         (self.gen_tab, "Generator && Oszilloskop")):
-            self.tabs.addTab(w, name)
+            self.tabs.addTab(self._scrollable(w), name)
 
         # Seitenleiste ein-/ausblenden; bei ausgeblendeter Leiste sitzt ein kompakter Mess-Knopf oben rechts
         self.btn_sidebar = QtWidgets.QToolButton()
@@ -127,6 +127,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._restore_settings()
         self._populate_devices(select_saved=True)
+        self._settings_ready = True         # ab jetzt Messeinstellungen sofort speichern (Absturz!)
         self.cb_fs.currentIndexChanged.connect(lambda: self._populate_devices(announce=False))
         self._hotplug_timer = QtCore.QTimer(self)
         self._hotplug_timer.setSingleShot(True)
@@ -965,6 +966,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.state.set_connection(self.cb_conn.currentData())
         self.state.status.emit(f"Gerät: {backend.describe()}")
 
+    @staticmethod
+    def _scrollable(page: QtWidgets.QWidget) -> QtWidgets.QScrollArea:
+        """Tab-Seite in einen Rollbereich legen: Ist eine Seite (Touch-Modus, große Schrift) höher
+        als der Bildschirm, wird gerollt, statt dass Windows das Fenster unten abschneidet."""
+        sc = QtWidgets.QScrollArea()
+        sc.setWidget(page)
+        sc.setWidgetResizable(True)
+        sc.setFrameShape(QtWidgets.QFrame.NoFrame)
+        return sc
+
     def _sample_changed(self, n: int):
         self._sim.sample = n
         self.state.status.emit(f"Simulator: Treiber-Exemplar Nr. {n}"
@@ -978,6 +989,21 @@ class MainWindow(QtWidgets.QMainWindow):
         eng.channels = ChannelConfig(mode=self.cb_mode.currentData(), ref_channel=1 if swap else 0,
                                      meas_channel=0 if swap else 1, r_nominal=self.r_nom.value())
         self._update_cal_status()
+        if getattr(self, "_settings_ready", False):
+            self._save_measure_settings()
+
+    def _save_measure_settings(self):
+        """Sofort speichern – nach einem Absturz passte sonst die Kanalzuordnung nicht mehr zur
+        (sofort gespeicherten) Kalibrierung."""
+        s = self.settings
+        s.setValue("fs", self.cb_fs.currentData())
+        s.setValue("sweep_exp", self.cb_len.currentData())
+        s.setValue("mode", self.cb_mode.currentData())
+        s.setValue("level", self.level.value())
+        s.setValue("averages", self.averages.value())
+        s.setValue("swap", self.chk_swap.isChecked())
+        s.setValue("r_nominal", self.r_nom.value())
+        s.sync()
 
     def _sync_connection(self, kind):
         i = self.cb_conn.findData(kind)
@@ -1054,8 +1080,8 @@ class MainWindow(QtWidgets.QMainWindow):
         name = self.name.text().strip() or None
         if self.state.measure(name):
             self.name.clear()
-            if self.tabs.currentWidget() in (self.gen_tab, self.level_tab, self.compare_tab):
-                self.tabs.setCurrentWidget(self.imp_tab)
+            if self.tabs.currentWidget().widget() in (self.gen_tab, self.level_tab, self.compare_tab):
+                self.tabs.setCurrentWidget(self.imp_tab.parentWidget().parentWidget())
 
     def _busy(self, busy):
         self.btn_measure.setEnabled(not busy)
@@ -1097,13 +1123,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         s = self.settings
         s.setValue("device_key", self.cb_device.currentData(KEY_ROLE) or "")
-        s.setValue("fs", self.cb_fs.currentData())
-        s.setValue("sweep_exp", self.cb_len.currentData())
-        s.setValue("mode", self.cb_mode.currentData())
-        s.setValue("level", self.level.value())
-        s.setValue("averages", self.averages.value())
-        s.setValue("swap", self.chk_swap.isChecked())
-        s.setValue("r_nominal", self.r_nom.value())
+        self._save_measure_settings()
         s.setValue("geometry", self.saveGeometry())
         self._autosave_timer.stop()
         self._remove_autosave()

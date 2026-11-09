@@ -206,6 +206,9 @@ def test_report_is_anonymized(tmp_path, monkeypatch):
     text = diagnostics.build_report({"Gerät": "Simulator"}, error="ValueError: x")
     assert "maxmuster" not in text and "~/Messungen/a.datsproj" in text
     assert "Version:" in text and "Gerät: Simulator" in text and "ValueError" in text
+    assert "Absturzprotokoll" not in text
+    (tmp_path / "absturz.log").write_text("Windows fatal exception: access violation\n", encoding="utf-8")
+    assert "access violation" in diagnostics.build_report()     # harter Absturz landet im Bericht
 
 
 def test_version_compare_and_changelog():
@@ -596,3 +599,55 @@ def test_axis_font_size_and_weight():
         assert p.bottom.getAxis("left").fixedWidth == ax.fixedWidth   # beide Diagramme bündig
     finally:
         appearance().current = old
+
+
+class _LaggySoundDevice:
+    """Ersatz für ``sounddevice``: Simulator mit großer Windows-Latenz (DirectSound ~0,5 s)."""
+
+    def __init__(self, sim, latency_s):
+        self.sim, self.latency_s = sim, latency_s
+
+    def query_devices(self, *_a, **_k):
+        return {"max_output_channels": 2, "max_input_channels": 2, "name": "USB AUDIO  CODEC"}
+
+    def playrec(self, out, samplerate, channels, **_k):
+        rec = self.sim.play_record(np.asarray(out)[:, 0], samplerate, in_channels=channels)
+        lag = int(self.latency_s * samplerate)
+        return np.vstack([np.zeros((lag, rec.shape[1])), rec])[:len(out)]
+
+    def stop(self):
+        pass
+
+
+@pytest.mark.parametrize("latency_s", [0.0, 0.537, 1.4])
+def test_large_device_latency_keeps_high_frequencies(latency_s):
+    """Tester mit echtem DATS (09.11.2026): 537 ms Latenz schnitten das Sweep-Ende ab → Müll ab ~10 kHz."""
+    from datsmess.audio.backend import SoundDeviceBackend
+    cfg = SweepConfig(fs=44100, sweep_exp=16)
+    sim = SimulatorBackend()
+    sim.set_connection("driver")
+    ref = MeasurementEngine(sim, cfg)
+    m_ref, _ = ref.measure_impedance()
+    be = SoundDeviceBackend.__new__(SoundDeviceBackend)
+    be._sd, be.input_device, be.output_device, be.label = _LaggySoundDevice(sim, latency_s), 0, 0, None
+    eng = MeasurementEngine(be, cfg)
+    m, raw = eng.measure_impedance()
+    assert abs(be.last_latency / cfg.fs - latency_s) < 0.02
+    hf = (m.f > 5000) & (m.f < 17000)
+    err = np.abs(m.Z[hf] - m_ref.Z[hf]) / np.abs(m_ref.Z[hf])
+    assert np.median(err) < 0.01
+    assert raw.quality["noise_db"] is not None        # Nachlauf (Rauschmessung) liegt in der Aufnahme
+
+
+def test_quick_parameters_ignore_noisy_treble(eng):
+    """Gestörte Höhen (z. B. abgeschnittener Sweep) dürfen fs/Re einer klaren Resonanz nicht verhindern."""
+    e, sim = eng
+    sim.set_connection("driver")
+    m, _ = e.measure_impedance()
+    rng = np.random.default_rng(1)
+    Z = m.Z.copy()
+    hf = m.f > 10000
+    Z[hf] *= 1 + 3 * (rng.standard_normal(hf.sum()) + 1j * rng.standard_normal(hf.sum()))
+    clean, noisy = quick_parameters(m.f, m.Z), quick_parameters(m.f, Z)
+    assert clean is not None and noisy is not None
+    assert abs(noisy.fs / clean.fs - 1) < 0.02 and abs(noisy.Re / clean.Re - 1) < 0.02

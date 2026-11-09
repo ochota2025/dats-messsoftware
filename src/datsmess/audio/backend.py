@@ -313,6 +313,31 @@ def device_choices(devices: list[DeviceInfo], fs: int, supports=None,
     return out_list
 
 
+def latency_of(stimulus: np.ndarray, rec: np.ndarray) -> int | None:
+    """Verzögerung der Aufnahme gegenüber dem Stimulus (Samples) – aus dem lautesten Eingangskanal.
+    ``None``, wenn praktisch kein Signal ankam (dann lässt sich nichts ausrichten)."""
+    from ..dsp.transfer import estimate_delay
+    rec = np.asarray(rec, dtype=float)
+    if rec.ndim == 1:
+        rec = rec[:, None]
+    rms = np.sqrt(np.mean(np.square(rec), axis=0))
+    if not len(rms) or float(np.max(rms)) < 1e-5:
+        return None
+    return estimate_delay(np.asarray(stimulus, dtype=float), rec[:, int(np.argmax(rms))])
+
+
+def align_recording(rec: np.ndarray, n: int, latency: int | None, margin: int) -> np.ndarray:
+    """Schneidet aus einer (längeren) Aufnahme ``n`` Samples so heraus, dass nur noch ``margin``
+    Samples Latenz übrig bleiben – Vorlauf, Sweep und Nachlauf liegen dann wie im Stimulus."""
+    rec = np.asarray(rec, dtype=float)
+    start = 0 if latency is None else max(0, latency - margin)
+    start = min(start, max(0, len(rec) - n))
+    out = rec[start:start + n]
+    if len(out) < n:
+        out = np.vstack([out, np.zeros((n - len(out), rec.shape[1]))])
+    return out
+
+
 class SoundDeviceBackend(AudioBackend):
     name = "Audio-Gerät"
 
@@ -341,14 +366,33 @@ class SoundDeviceBackend(AudioBackend):
         info = self._sd.query_devices(self.input_device, "input")
         return min(wanted, int(info["max_input_channels"]))
 
-    def play_record(self, stimulus: np.ndarray, fs: int, in_channels: int = 2) -> np.ndarray:
-        self.stop()                 # laufender Generator/Oszilloskop-Strom würde das Gerät blockieren
+    # Unter Windows (MME/DirectSound) liegen zwischen Ausgabe und Aufnahme oft 0,3–0,6 s. Ohne
+    # Nachlauf fehlte das Ende des Sweeps – also die höchsten Frequenzen – in der Aufnahme.
+    PAD_S = 1.0                     # zusätzliche Aufnahmezeit (mindestens)
+    MARGIN_S = 0.01                 # so viel Vorlauf bleibt nach dem Latenzausgleich stehen
+    last_latency: int | None = None  # gemessene Latenz Ausgang → Eingang (Samples) der letzten Aufnahme
+
+    def _playrec(self, stimulus: np.ndarray, fs: int, n_in: int) -> np.ndarray:
         n_out = self._out_channels()
         out = np.tile(stimulus.astype(np.float32)[:, None], (1, n_out))
-        n_in = self._in_channels(in_channels)
         rec = self._sd.playrec(out, samplerate=fs, channels=n_in, dtype="float32",
                                device=(self.input_device, self.output_device), blocking=True)
-        rec = np.asarray(rec, dtype=float)
+        return np.asarray(rec, dtype=float)
+
+    def play_record(self, stimulus: np.ndarray, fs: int, in_channels: int = 2) -> np.ndarray:
+        self.stop()                 # laufender Generator/Oszilloskop-Strom würde das Gerät blockieren
+        n = len(stimulus)
+        n_in = self._in_channels(in_channels)
+        prev = self.last_latency or 0
+        pad = int(fs * self.PAD_S) + int(1.5 * prev)
+        for _attempt in range(2):
+            rec = self._playrec(np.concatenate([stimulus, np.zeros(pad)]), fs, n_in)
+            lat = latency_of(stimulus, rec)
+            if lat is None or lat <= pad:
+                break
+            pad = int(1.5 * lat) + int(0.2 * fs)    # Latenz größer als gedacht → länger aufnehmen
+        self.last_latency = lat
+        rec = align_recording(rec, n, lat, int(self.MARGIN_S * fs))
         if rec.shape[1] < in_channels:
             rec = np.hstack([rec, np.zeros((rec.shape[0], in_channels - rec.shape[1]))])
         return rec

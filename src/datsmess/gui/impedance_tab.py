@@ -105,7 +105,16 @@ class ImpedanceTab(QtWidgets.QWidget):
         pl.addWidget(self.slot_bar)
         pl.addWidget(self.plot, 1)
         split.addWidget(pw)
-        split.addWidget(side)
+        # Seitenspalte scrollbar: Im Touch-Modus ist sie sonst höher als ein Laptop-Bildschirm,
+        # und Windows schneidet das Fenster unten ab (Tester, 09.11.2026).
+        side_scroll = QtWidgets.QScrollArea()
+        side_scroll.setWidget(side)
+        side_scroll.setWidgetResizable(True)
+        side_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        side_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        side_scroll.setMaximumWidth(380)
+        side_scroll.setMinimumWidth(285)
+        split.addWidget(side_scroll)
         split.setStretchFactor(0, 1)
         lay = QtWidgets.QHBoxLayout(self)
         lay.addWidget(split)

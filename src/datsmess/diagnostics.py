@@ -122,6 +122,20 @@ def tail(path: Path | None, n: int = 150) -> list[str]:
     return lines[-n:]
 
 
+def crash_lines(n: int = 60) -> list[str]:
+    """Letzte Zeilen von ``absturz.log`` (faulthandler) – harte Abstürze landen nicht im Protokoll."""
+    path = log_path()
+    if path is None:
+        return []
+    fault = Path(path).parent / "absturz.log"
+    try:
+        lines = fault.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    lines = [ln for ln in lines if ln.strip()]
+    return ["  " + ln for ln in lines[-n:]]
+
+
 def build_report(context: dict[str, str] | None = None, error: str | None = None, n_log: int = 150) -> str:
     """Fehlerbericht als Klartext (ohne persönliche Pfade)."""
     now = _dt.datetime.now().strftime("%d.%m.%Y %H:%M")
@@ -140,6 +154,9 @@ def build_report(context: dict[str, str] | None = None, error: str | None = None
             out += [f"{k}:", *("  " + line for line in v.splitlines())]
         else:
             out.append(f"{k}: {v}")
+    crash = crash_lines()
+    if crash:
+        out += ["", "Absturzprotokoll (absturz.log, letzte Einträge):", *crash]
     out += ["", "Audio-Geräte:", *device_lines(), "",
             f"Protokoll (letzte {n_log} Zeilen):", "-" * 40, *tail(log_path(), n_log)]
     return anonymize("\n".join(out)) + "\n"

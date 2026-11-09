@@ -1,5 +1,26 @@
 # Neuerungen
 
+## 0.2.17 – 09.11.2026
+
+Erste Rückmeldung mit einem echten DATS V3 – danke! Behoben:
+
+- **Gestörte Kurve oberhalb von etwa 10 kHz:** Unter Windows (DirectSound/MME) kommt der Ton erst
+  rund eine halbe Sekunde nach dem Abspielen wieder an. Die Aufnahme war zu kurz, das Ende des
+  Sweeps fehlte, und das sind die hohen Frequenzen. Jetzt nimmt das Programm länger auf und gleicht
+  die Verzögerung aus. **Bitte nach dem Update neu kalibrieren und neu messen.** Alte Messungen
+  lassen sich in den Höhen nicht reparieren, denn dort fehlen die Daten.
+- Dadurch stimmen auch der Geräte-Check („schwankt über die Frequenz um …“) und die
+  Kalibrierung („Schwankung Referenzwiderstand“) wieder. Der Geräte-Check zeigt die gemessene
+  Verzögerung an, statt „Rauschen nan“.
+- **Kanalzuordnung nach Absturz:** Kanaltausch, Referenzwiderstand, Abtastrate usw. wurden erst
+  beim Beenden gespeichert. Nach einem Absturz passten sie nicht mehr zur Kalibrierung. Jetzt
+  speichert das Programm sie sofort.
+- **Fenster zu hoch im Touch-Modus:** Die Tabs und die Messliste rollen jetzt, statt dass das
+  Fenster höher als der Bildschirm wird und unten abgeschnitten ist.
+- **Kennwerte trotz gestörter Höhen:** Ist eine Resonanz klar zu sehen, rechnet das Programm fs,
+  Re, Q usw. notfalls ohne den Bereich über 5 kHz.
+- Der Fehlerbericht enthält jetzt das Absturzprotokoll, falls das Programm hart abgestürzt ist.
+
 ## 0.2.16 – 08.11.2026
 
 - **Klarere Grenzen bei Pegelreihe und Klirr:** Das DATS V3 ist eine Soundkarte mit Messwiderstand

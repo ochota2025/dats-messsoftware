@@ -368,7 +368,9 @@ class AppState(QtCore.QObject):
             msgs = [f"„{m.name}“ gemessen ({len(m.f)} Frequenzpunkte)"]
             if raw.quality is not None:
                 msgs.append(summary(raw.quality))
-                log.info("Messung „%s“: %s", m.name, summary(raw.quality))
+                lat = getattr(self.backend, "last_latency", None)
+                log.info("Messung „%s“: %s%s", m.name, summary(raw.quality),
+                         "" if lat is None else f" (Gerätelatenz {1000.0 * lat / self.engine.sweep.fs:.0f} ms)")
             else:
                 if raw.clipped:
                     msgs.append("WARNUNG: Übersteuerung – Pegel reduzieren!")
